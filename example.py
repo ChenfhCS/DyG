@@ -55,7 +55,7 @@ if __name__ == '__main__':
     model = My_Model(args, node_features = 2).to(args['device'])
 
     loss_func = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0005)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.0005)
 
     pbar = tqdm(range(200), leave=False)
     for epoch in pbar:
