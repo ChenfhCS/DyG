@@ -15,7 +15,7 @@ node_cnt = 0
 node_idx = {}
 idx_node = []
 
-file_path = current_path + '/rec-epinions-user-ratings.edges'
+file_path = current_path + '/rec-amazon-ratings.edges'
 save_graph_path = current_path + '/data/graphs.npz'
 save_features_path = current_path + '/data/features.npz'
 
@@ -25,7 +25,7 @@ with open(file_path) as f:
         if l[0] == '%':
             continue
 
-        x, y, e, t = map(int, l.split(' '))
+        x, y, e, t = map(float, l.split(','))
         # print (x,y,e,t)
         timestamp = datetime.fromtimestamp(t)
         ts.append(timestamp)
@@ -47,14 +47,6 @@ with open(file_path) as f:
 print ("Min ts", min(ts), "max ts", max(ts))
 print ("Total time span: {} days".format((max(ts) - min(ts)).days))
 links.sort(key =lambda x: x[2])
-print ("# temporal links", len(links))
-
-# import networkx as nx
-# agg_G = nx.Graph()
-# for a,b,t in links:
-#     agg_G.add_edge(a,b)
-
-# print ("Agg graph", len(agg_G.nodes()), len(agg_G.edges()))
 
 import networkx as nx
 import numpy as np
@@ -63,20 +55,18 @@ from datetime import datetime, timedelta
 collect data from 'START_DATE' and ends to 'END_DATE'.
 generate a graph per 'SLICE_DAYS'.
 '''
-# slice defaule = 30
-SLICE_DAYS = 1
-# START_DATE = min(ts) + timedelta(100)
-# END_DATE = min(ts) + timedelta(500)
-
-START_DATE = min(ts) + timedelta(1)
+SLICE_DAYS = 30
+START_DATE = min(ts) + timedelta(0)
+# END_DATE =  max(ts) - timedelta(700)
+END_DATE = min(ts) + timedelta(1500)
 # END_DATE = max(ts)
-END_DATE = min(ts) + timedelta(100)
 
-print ("Start date", START_DATE)
-print ("End date", END_DATE)
+# END_DATE = timedelta(100)
 
 slices_links = defaultdict(lambda : nx.DiGraph())
 slices_features = defaultdict(lambda : {})
+
+print ("Start date", START_DATE)
 
 slice_id = -1
 snapshot_id = 0
@@ -93,15 +83,25 @@ for (a, b, time) in links:
     else:
         days_diff = (datetime_object - START_DATE).days
 
+
     slice_id = days_diff // SLICE_DAYS
 
     if slice_id == 1+prev_slice_id and slice_id > 0:
         snapshot_id += 1
         slices_links[snapshot_id] = nx.DiGraph()
         slices_links[snapshot_id].add_nodes_from(slices_links[snapshot_id-1].nodes(data=True))
+        # assert (len(slices_links[snapshot_id].edges()) ==0)
+        #assert len(slices_links[slice_id].nodes()) >0
 
     if slice_id == 1+prev_slice_id and slice_id ==0:
         slices_links[snapshot_id] = nx.DiGraph()
+
+    # if days_diff % SLICE_DAYS == 7 or days_diff % SLICE_DAYS == 6 or days_diff % SLICE_DAYS == 5:
+    #     if a not in slices_links[slice_id]:
+    #         slices_links[slice_id].add_node(a)
+    #     if b not in slices_links[slice_id]:
+    #         slices_links[slice_id].add_node(b)
+    #     slices_links[slice_id].add_edge(a,b, date=datetime_object)
 
     if a not in slices_links[snapshot_id]:
         slices_links[snapshot_id].add_node(a)

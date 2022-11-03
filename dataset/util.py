@@ -31,7 +31,7 @@ def create_edge_samples(graph, val_mask_fraction=0.1, test_mask_fraction=0.1):
     """
     edges = np.array(list(nx.Graph(graph).edges()))
     edges_positive = []   # Constraint to restrict new links to existing nodes.
-    Num_of_edges = 100000
+    Num_of_edges = 10000
     for idx, e in enumerate(edges):
         if idx <= Num_of_edges:
         # if next_graph.has_edge(e[0], e[1]) and idx <= Num_of_edges:
@@ -78,6 +78,6 @@ def train_test_split(sample_pos, sample_neg, train_ratio: float = 0.8):
     train_samples = torch.tensor(np.vstack((train_sample_pos, train_sample_neg)))  # train_pos_feats and train_neg_feats are 2-dim numpy matrix, stack them to a new numpy matrix via vstack()
     train_labels = torch.tensor(np.vstack((train_pos_labels, train_neg_labels)), dtype=torch.float32)  # train_pos_labels and train_neg_labels are 1-dim numpy array
     test_samples = torch.tensor(np.vstack((test_sample_pos, test_sample_neg)))
-    test_labels = torch.tensor(np.append(test_pos_labels, test_neg_labels), dtype=torch.float32)
+    test_labels = torch.tensor(np.append(test_pos_labels, test_neg_labels), dtype=torch.int32)
 
     return train_samples, train_labels, test_samples, test_labels

@@ -11,7 +11,7 @@ from ..DynamicGraphTemporalSignal import DynamicGraphTemporalSignal
 # import DynamicGraphTemporalSignal
 from ..util import generate_degree_feats, create_edge_samples
 
-class EpinionDatasetLoader(object):
+class MovieDatasetLoader(object):
     """A dataset of mobility and history of reported cases of Epinion
     in England NUTS3 regions, from 3 March to 12 of May. The dataset is
     segmented in days and the graph is directed and weighted. The graph
@@ -28,7 +28,7 @@ class EpinionDatasetLoader(object):
 
     def _load_graph(self):
         current_path = os.getcwd()
-        graph_path = current_path + '/dataset/Epinion/data/graphs.npz'
+        graph_path = current_path + '/dataset/Movie/data/graphs.npz'
         self._dataset = np.load(graph_path, allow_pickle=True, encoding='latin1')['graph'][0:self.timesteps]
 
     def _get_edges_and_weights(self):
@@ -40,6 +40,8 @@ class EpinionDatasetLoader(object):
                               torch.LongTensor(adj_sp.data.astype(np.int32))).coalesce()
             self._edges.append(adj.indices())
             self._edge_weights.append(adj.values())
+            # print('number of edges: ', self._dataset[time].number_of_edges())
+            # print('number of generated edges: ', adj.indices().size())
     
     def _get_edge_weights(self):
         return 0
@@ -47,7 +49,7 @@ class EpinionDatasetLoader(object):
     def _get_features(self):
         self.features = []
         current_path = os.getcwd()
-        feats_path = current_path + "/dataset/Epinion/data/eval_{}_feats/".format(str(len(self._dataset)))
+        feats_path = current_path + "/dataset/Movie/data/eval_{}_feats/".format(str(len(self._dataset)))
         # print(feats_path)
         try:
             pbar = tqdm(self._dataset, desc='Loading features', leave=False)
@@ -109,7 +111,7 @@ class EpinionDatasetLoader(object):
         return dataset
 
 if __name__ == '__main__':
-    dataset = EpinionDatasetLoader()
+    dataset = MovieDatasetLoader()
     dataset._get_edges_and_weights()
     print('_get_edges_and_weights() Pass!')
     dataset._get_features()

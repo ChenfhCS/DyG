@@ -28,7 +28,7 @@ class DynamicGraphTemporalSignal(object):
 
     def __init__(
         self,
-        snapshots,
+        raw_graphs,
         edge_indices,
         edge_weights,
         features,
@@ -36,7 +36,7 @@ class DynamicGraphTemporalSignal(object):
         sample_neg,
         **kwargs
     ):
-        self.snapshots = snapshots
+        self.raw_graphs = raw_graphs
         self.edge_indices = edge_indices
         self.edge_weights = edge_weights
         self.features = features
@@ -64,11 +64,11 @@ class DynamicGraphTemporalSignal(object):
     def _set_snapshot_count(self):
         self.snapshot_count = len(self.features)
 
-    def _get_snapshot(self, time_index: int):
+    def _get_raw_graph(self, time_index: int):
         if self.edge_indices[time_index] is None:
-            return self.snapshots[time_index]
+            return self.raw_graphs[time_index]
         else:
-            return self.snapshots[time_index]
+            return self.raw_graphs[time_index]
 
     def _get_edge_index(self, time_index: int):
         if self.edge_indices[time_index] is None:
@@ -131,14 +131,14 @@ class DynamicGraphTemporalSignal(object):
                 **{key: getattr(self, key)[time_index] for key in self.additional_feature_keys}
             )
         else:
-            snapshot = self._get_snapshot(time_index)
+            raw_graph = self._get_raw_graph(time_index)
             x = self._get_features(time_index)
             edge_index = self._get_edge_index(time_index)
             edge_weight = self._get_edge_weight(time_index)
             train_samples, train_labels, test_samples, test_labels = self._get_samples(time_index)
             # y = self._get_target(time_index)
             # additional_features = self._get_additional_features(time_index)
-            additional_features = {'snapshot': snapshot,
+            additional_features = {'raw_graph': raw_graph,
                                     'train_samples': train_samples, 
                                     'train_labels': train_labels,
                                     'test_samples': test_samples,

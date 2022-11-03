@@ -40,18 +40,12 @@ class GAT_Layer(nn.Module):
             self.lin_residual = nn.Linear(input_dim, n_heads * self.out_dim, bias=False)
     
     def forward(self, graph):
-        '''
-            input: feature tensor of training nodes
-        '''
-        # feat = graph.ndata['feat']
-        feat = graph.x
+        graph = copy.deepcopy(graph)
         edge_index = graph.edge_index
-        # edge_index = graph.edges()
+        # edge_weight = graph.edge_weight.reshape(-1, 1)
         H, C = self.n_heads, self.out_dim
-
+        x = self.lin(graph.x).view(-1, H, C) # [N, heads, out_dim
         # attention
-        start = time.time()
-        x = self.lin(feat).view(-1, H, C)
         alpha_l = (x * self.att_l).sum(dim=-1).squeeze() # [N, heads]
         alpha_r = (x * self.att_r).sum(dim=-1).squeeze()
         alpha_l = alpha_l[edge_index[0]] # [num_edges, heads]
@@ -66,19 +60,18 @@ class GAT_Layer(nn.Module):
             coefficients = self.attn_drop(coefficients)
             x = self.ffd_drop(x)
         x_j = x[edge_index[0]]  # [num_edges, heads, out_dim]
+        out = scatter(x_j * coefficients[:, :, None], edge_index[1], 0, x, reduce='sum')
+        out = self.act(out)
+        # output    
+        # x.scatter_(0, index, x_j * coefficients[:, :, None], reduce="add")
+        # out = self.act(scatter(x_j * coefficients[:, :, None], edge_index[1], dim=0, reduce="sum")) # 报错，因为edge_index不包含所有的节点，因此输出维度错误
+        out = x.reshape(-1, self.n_heads*self.out_dim) #[num_nodes, output_dim]
 
-        # output
-        out = self.act(scatter(x_j * coefficients[:, :, None], edge_index[1], dim=0, reduce="sum"))
-        out = out.reshape(-1, self.n_heads*self.out_dim) #[num_nodes, output_dim]
-        # self.args['gcn_time'] += time.time() - start
-        # if self.residual:
-        #     out = out + self.lin_residual(graph.x)
-
+        if self.residual:
+            out = out + self.lin_residual(graph.x)
         return out
         # graph.x = out
-        # # torch.cuda.empty_cache()
         # return graph
-        # return input
 
 
 class ATT_layer(nn.Module):

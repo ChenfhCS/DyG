@@ -1,4 +1,3 @@
-import copy
 import os
 import sys
 import copy
@@ -64,6 +63,8 @@ class DySAT(nn.Module):
         self.residual = True
         self.interval_ratio = 0
 
+        self.structural_out_pre = []
+
         self.n_hidden = self.temporal_layer_config[-1]
         # self.method = method
 
@@ -86,10 +87,24 @@ class DySAT(nn.Module):
             padded = torch.cat((out, zero_padding), dim=0)
             structural_outputs_padded.append(padded)
         structural_outputs_padded = torch.cat(structural_outputs_padded, dim=1) # [N, T, F]
+        # print([out.size() for out in structural_outputs])
+        # print('structure input size: ', structural_outputs_padded.size())
+        # if len(self.structural_out_pre) < 1:
+        #     for t in range(structural_outputs_padded.size(1)):
+        #         temp = structural_outputs_padded[self.args['workload_gcn'][t], t, :].clone()
+        #         self.structural_out_pre.append(temp)
+        
+        # for t in range(structural_outputs_padded.size(1)):
+        #     temp = structural_outputs_padded[self.args['workload_gcn'][t], t, :].clone()
+        #     structural_outputs_padded[self.args['workload_gcn'][t], t, :] = self.structural_out_pre[t]
+        #     self.structural_out_pre[t] = temp.clone()
+        #         # temp = structural_outputs_padded[self.args['workload_gcn'][t], :, :]
+        #         # self.structural_out_pre.append(temp)
         
         # Temporal Attention forward
         temporal_out = self.temporal_attn(structural_outputs_padded)
         
+        # print('node embeddings: ', temporal_out[10, -1, :])
         return temporal_out
 
     # construct model

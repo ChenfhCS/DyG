@@ -11,7 +11,7 @@ from ..DynamicGraphTemporalSignal import DynamicGraphTemporalSignal
 # import DynamicGraphTemporalSignal
 from ..util import generate_degree_feats, create_edge_samples
 
-class EpinionDatasetLoader(object):
+class StackDatasetLoader(object):
     """A dataset of mobility and history of reported cases of Epinion
     in England NUTS3 regions, from 3 March to 12 of May. The dataset is
     segmented in days and the graph is directed and weighted. The graph
@@ -22,13 +22,13 @@ class EpinionDatasetLoader(object):
     number of cases in each node after 1 day. 
     """
 
-    def __init__(self, timesteps: int = 10):
+    def __init__(self, timesteps: int = 20):
         self.timesteps = timesteps
         self._load_graph()
 
     def _load_graph(self):
         current_path = os.getcwd()
-        graph_path = current_path + '/dataset/Epinion/data/graphs.npz'
+        graph_path = current_path + '/dataset/Stack/data/graphs.npz'
         self._dataset = np.load(graph_path, allow_pickle=True, encoding='latin1')['graph'][0:self.timesteps]
 
     def _get_edges_and_weights(self):
@@ -47,7 +47,7 @@ class EpinionDatasetLoader(object):
     def _get_features(self):
         self.features = []
         current_path = os.getcwd()
-        feats_path = current_path + "/dataset/Epinion/data/eval_{}_feats/".format(str(len(self._dataset)))
+        feats_path = current_path + "/dataset/Stack/data/eval_{}_feats/".format(str(len(self._dataset)))
         # print(feats_path)
         try:
             pbar = tqdm(self._dataset, desc='Loading features', leave=False)
