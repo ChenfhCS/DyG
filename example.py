@@ -14,7 +14,7 @@ from dataset import EpinionDatasetLoader, AmazonDatasetLoader, MovieDatasetLoade
 from nn import DySAT
 from nn import classifier
 
-from MLDP import Partition_DyG
+# from MLDP import Partition_DyG
 
 class My_Model(torch.nn.Module):
     def __init__(self, args, node_features):
