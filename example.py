@@ -68,10 +68,13 @@ def _get_partitions(snapshots):
     return total_workload_gcn[1], total_workload_rnn[1]
 
 def _save_log(args, loss_log, acc_log):
+    folder_in = os.path.exists('./log/')
+    if not folder_in:
+        os.makedirs('./log/')
     df_loss=pd.DataFrame(data=loss_log)
-    df_loss.to_csv('/home/Distributed_DGNN/experiment_results/{}_{}_loss.csv'.format(args['dataset'], args['timesteps']), header=False)
+    df_loss.to_csv('./log/{}_{}_loss.csv'.format(args['dataset'], args['timesteps']), header=False)
     df_acc=pd.DataFrame(data=acc_log)
-    df_acc.to_csv('/home/Distributed_DGNN/experiment_results/{}_{}_acc.csv'.format(args['dataset'], args['timesteps']), header=False)
+    df_acc.to_csv('./log/{}_{}_acc.csv'.format(args['dataset'], args['timesteps']), header=False)
 
 if __name__ == '__main__':
     args = _get_args()
