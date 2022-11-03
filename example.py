@@ -49,7 +49,7 @@ def _get_args():
                     help="total number of epochs")
     parser.add_argument('--world_size', type=int, default=1,
                         help='method for DGNN training')
-    parser.add_argument('--dataset', type=str, default='Epinion_rating',
+    parser.add_argument('--dataset', type=str, default='Epinion',
                         help='method for DGNN training')
     args = vars(parser.parse_args())
     return args
@@ -81,13 +81,13 @@ if __name__ == '__main__':
     args['rank'] = 0
     args['device'] = torch.device("cuda")
     # args['device'] = 'cpu'
-    if args['dataset'] == 'Epinion_rating':
+    if args['dataset'] == 'Epinion':
         loader = EpinionDatasetLoader(timesteps = args['timesteps'])
-    elif args['dataset'] == 'Amazon_rating':
+    elif args['dataset'] == 'Amazon':
         loader = AmazonDatasetLoader(timesteps = args['timesteps'])
-    elif args['dataset'] == 'Movie_rating':
+    elif args['dataset'] == 'Movie':
         loader = MovieDatasetLoader(timesteps = args['timesteps'])
-    elif args['dataset'] == 'Stack_overflow':
+    elif args['dataset'] == 'Stack':
         loader = StackDatasetLoader(timesteps = args['timesteps'])
     else:
         raise ValueError("No such dataset...")
