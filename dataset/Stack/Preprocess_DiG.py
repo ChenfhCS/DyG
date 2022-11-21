@@ -64,7 +64,7 @@ collect data from 'START_DATE' and ends to 'END_DATE'.
 generate a graph per 'SLICE_DAYS'.
 '''
 # slice defaule = 30
-SLICE_DAYS = 10
+SLICE_DAYS = 30
 START_DATE = min(ts)
 END_DATE = min(ts) + timedelta(1000)
 
