@@ -76,6 +76,7 @@ class DySAT(nn.Module):
         for t in range(0, self.num_time_steps):
             graphs[t] = graphs[t].to(self.device)
             structural_out.append(self.structural_attn(graphs[t]))
+            # graphs[t] = graphs[t].to('cpu')
         structural_outputs = [g[:,None,:] for g in structural_out] # list of [Ni, 1, F]
 
         # padding outputs along with Ni
@@ -105,7 +106,11 @@ class DySAT(nn.Module):
         temporal_out = self.temporal_attn(structural_outputs_padded)
         
         # print('node embeddings: ', temporal_out[10, -1, :])
-        return temporal_out
+        # print('adj: ', graphs[2].edge_index)
+        # print('structure embedding: ', structural_outputs[2])
+        # print('padded structure embedding: ', structural_outputs_padded[:, 2, :])
+        # print('temporal embedding: ', temporal_out[0,0,:])
+        return structural_outputs_padded, temporal_out
 
     # construct model
     def build_model(self):

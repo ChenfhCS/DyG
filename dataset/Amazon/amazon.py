@@ -29,7 +29,7 @@ class AmazonDatasetLoader(object):
     def _load_graph(self):
         current_path = os.getcwd()
         graph_path = current_path + '/dataset/Amazon/data/graphs.npz'
-        self._dataset = np.load(graph_path, allow_pickle=True, encoding='latin1')['graph'][0:self.timesteps]
+        self._dataset = np.load(graph_path, allow_pickle=True, encoding='latin1')['graph'][10: 10+self.timesteps]
 
     def _get_edges_and_weights(self):
         self._edges = []
@@ -109,7 +109,7 @@ class AmazonDatasetLoader(object):
         return dataset
 
 if __name__ == '__main__':
-    dataset = EpinionDatasetLoader()
+    dataset = AmazonDatasetLoader()
     dataset._get_edges_and_weights()
     print('_get_edges_and_weights() Pass!')
     dataset._get_features()
