@@ -266,7 +266,6 @@ def Cross_nodes(timesteps, nodes_list, current_workload, workload):
     # print(num)
     return num
 
-
 def plot_graph(args,G, node_color, edge_color, pos, flag):
     # node_color_mask = {}
     # node_color_mask[0] = 'red'
@@ -290,24 +289,10 @@ def plot_graph(args,G, node_color, edge_color, pos, flag):
     plt.savefig('./experiment_results/{}_graph_{}.png'.format(flag, args['dataset']), dpi=300)
     plt.close()
 
-def Computation_time(graphs, num_devices, timesteps, workload_GCN, workload_RNN, GCN_comp_scale, ATT_comp_scale):
-    current_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
-    device = torch.device("cuda")
-    str_path = current_path + '/method/cost_evaluator/model/str_{}.pt'.format(10)
-    tem_path = current_path + '/method/cost_evaluator/model/tem_{}.pt'.format(10)
-    model_str = MLP_Predictor(in_feature = 2)
-    model_str.load_state_dict(torch.load(str_path))
-    model_str = model_str.to(device)
-
-    model_tem = MLP_Predictor(in_feature = 2)
-    model_tem.load_state_dict(torch.load(tem_path))
-    model_tem = model_tem.to(device)
-
-    model_str.eval()
-    model_tem.eval()
-
+def Computation_time(graphs, num_devices, timesteps, workload_GCN, workload_RNN, model_str, model_tem, device):
     GCN_time = [0 for i in range(num_devices)]
     RNN_time = [0 for i in range(num_devices)]
+    # device = model_str.device
     for m in range(num_devices):
         gcn_comp_time = 0
         rnn_comp_time = 0
@@ -331,8 +316,8 @@ def Computation_time(graphs, num_devices, timesteps, workload_GCN, workload_RNN,
         tem_input = torch.Tensor([float(len(full_nodes)/10000), float(total_time_step/10)]).to(device)
         cost = model_tem(tem_input)
         rnn_comp_time += cost.item()
-        GCN_time[m] += round(gcn_comp_time, 4)
-        RNN_time[m] += round(rnn_comp_time, 4)
+        GCN_time[m] += round(gcn_comp_time, 3)
+        RNN_time[m] += round(rnn_comp_time, 3)
 
 
     # GCN_time = [0 for i in range(num_devices)]

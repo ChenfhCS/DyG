@@ -142,7 +142,7 @@ class ATT_layer(nn.Module):
         # 5: Dropout on attention weights.
         if self.training:
             outputs = self.attn_dp(outputs)
-        print('attention map: ', self.attn_wts_all[0,:,:])
+        # print('attention map: ', self.attn_wts_all[0,:,:])
         outputs = torch.matmul(outputs, v_)  # [hN, T, F/h]
         outputs = torch.cat(torch.split(outputs, split_size_or_sections=int(outputs.shape[0]/self.n_heads), dim=0), dim=2) # [N, T, F]
         

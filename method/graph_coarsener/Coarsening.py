@@ -55,13 +55,13 @@ def run_coarsening(args):
     model = LabelPropagator(graph_list, full_graph, args)
     model.do_a_series_of_propagations()
 
-def coarsener(args, graphs = None):
-    args['round'] = 30
+def coarsener(args, graphs, full_graph, model_str, model_tem, device):
+    args['rounds'] = 10
     args['seed'] = 42
     args['weighting'] = 'unit'
     args['method'] = 'cost'
-    graph_list, full_graph = graph_reader(args, graphs)
-    model = LabelPropagator(graph_list, full_graph, args)
+    # graph_list, full_graph = graph_reader(args, graphs)
+    model = LabelPropagator(graphs, full_graph, args, model_str, model_tem, device)
     coarsened_graph, node_to_nodes_list = model.graph_coarsening()
     return coarsened_graph, node_to_nodes_list
 

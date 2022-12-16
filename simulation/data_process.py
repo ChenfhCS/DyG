@@ -188,7 +188,8 @@ def graph_concat(graphs):
     G = nx.Graph()
 
     # add nodes and edges
-    for i in range(len(graphs)):
+    # for i in range(len(graphs)):
+    for i in tqdm(range(len(graphs)), desc='Concatenating...', leave=False):
         snap_id = [i]
         node_idx = {node: {'orig_id': node} for node in list(graphs[i].nodes())}
         nx.set_node_attributes(graphs[i], snap_id, "snap_id")
@@ -197,7 +198,8 @@ def graph_concat(graphs):
         nx.set_edge_attributes(graphs[i], attr)
         # print('Snapshot {} has nodes {} and edges {}'.format(i, graphs[i].number_of_nodes(), graphs[i].number_of_edges()))
         G = nx.disjoint_union(G, graphs[i])
-    for node in list(G):
+    # for node in list(G):
+    for node in tqdm(list(G), desc='Write attributes...', leave=False):
         snap_id = G.nodes[node]['snap_id'][0]
         tem_idx = 0
         for i in range(snap_id):

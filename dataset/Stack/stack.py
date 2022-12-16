@@ -3,9 +3,11 @@ import networkx as nx
 import torch
 import scipy.sparse as sp
 import os, sys
+sys.path.append("..") 
+current_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
 
 from tqdm import tqdm
-from ..DynamicGraphTemporalSignal import DynamicGraphTemporalSignal
+from ..DynamicGraphSignal import DynamicGraphTemporalSignal
 
 # sys.path.append("..")
 # import DynamicGraphTemporalSignal
@@ -27,7 +29,6 @@ class StackDatasetLoader(object):
         self._load_graph()
 
     def _load_graph(self):
-        current_path = os.getcwd()
         graph_path = current_path + '/dataset/Stack/data/graphs.npz'
         self._dataset = np.load(graph_path, allow_pickle=True, encoding='latin1')['graph'][0:self.timesteps]
 
@@ -109,7 +110,8 @@ class StackDatasetLoader(object):
         return dataset
 
 if __name__ == '__main__':
-    dataset = EpinionDatasetLoader()
+    current_path = os.getcwd()
+    dataset = StackDatasetLoader()
     dataset._get_edges_and_weights()
     print('_get_edges_and_weights() Pass!')
     dataset._get_features()

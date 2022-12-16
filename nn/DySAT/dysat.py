@@ -53,13 +53,13 @@ class DySAT(nn.Module):
         self.num_features = num_features
 
         # network parameters
-        self.structural_head_config = [8]
-        self.structural_layer_config = [128]
-        self.temporal_head_config = [8]
-        self.temporal_layer_config = [128]
-        self.spatial_drop = 0.1
+        self.structural_head_config = [4]
+        self.structural_layer_config = [16]
+        self.temporal_head_config = [4]
+        self.temporal_layer_config = [16]
+        self.spatial_drop = 0.5
         self.temporal_drop = 0.5
-        self.out_feats = 128
+        self.out_feats = 16
         self.residual = True
         self.interval_ratio = 0
 
@@ -107,9 +107,9 @@ class DySAT(nn.Module):
         
         # print('node embeddings: ', temporal_out[10, -1, :])
         # print('adj: ', graphs[2].edge_index)
-        # print('structure embedding: ', structural_outputs[2])
-        # print('padded structure embedding: ', structural_outputs_padded[:, 2, :])
-        # print('temporal embedding: ', temporal_out[0,0,:])
+        # print('structure embedding: ', structural_outputs[0][:10, :, 0:10])
+        # print('padded structure embedding: ', structural_outputs_padded[10, -1, :])
+        # print('temporal embedding: ', temporal_out[:10, 0, 0:10])
         return structural_outputs_padded, temporal_out
 
     # construct model

@@ -9,15 +9,13 @@ from tqdm import tqdm
 from .print_and_read import json_dumper
 from .calculation_helper import overlap, unit, min_norm, normalized_overlap, overlap_generator, update_node_weight
 
-import sys
-sys.path.append("..")
-from cost_evaluator import MLP_Predictor
+# from cost_evaluator import MLP_Predictor
 
 class LabelPropagator:
     """
     Label propagation class.
     """
-    def __init__(self, graphs, graph, args):
+    def __init__(self, graphs, graph, args, model_str, model_tem, device):
         """
         Setting up the Label Propagator object.
         :param graph: NetworkX object.
@@ -43,17 +41,21 @@ class LabelPropagator:
                 self.nodes_list_mask[node][snap_id].append(self.graph.nodes[node]['orig_id'])
             # print(self.nodes_list_mask[node])
 
-        self.device = torch.device("cuda")
-        self.model_str = MLP_Predictor(in_feature = 2)
-        self.model_str.load_state_dict(torch.load('../Model_evaluation/model/str_{}.pt'.format(10)))
-        self.model_str = self.model_str.to(self.device)
+        self.model_str = model_str
+        self.model_tem = model_tem
+        # current_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
+        # path = current_path + '/method/cost_evaluator/model/'
+        self.device = device
+        # self.model_str = MLP_Predictor(in_feature = 2)
+        # self.model_str.load_state_dict(torch.load(path + 'str_10.pt'))
+        # self.model_str = self.model_str.to(self.device)
 
-        self.model_tem = MLP_Predictor(in_feature = 2)
-        self.model_tem.load_state_dict(torch.load('../Model_evaluation/model/tem_{}.pt'.format(10)))
-        self.model_tem = self.model_tem.to(self.device)
+        # self.model_tem = MLP_Predictor(in_feature = 2)
+        # self.model_tem.load_state_dict(torch.load(path + 'tem_10.pt'))
+        # self.model_tem = self.model_tem.to(self.device)
 
-        self.model_str.eval()
-        self.model_tem.eval()
+        # self.model_str.eval()
+        # self.model_tem.eval()
 
     def weight_setup(self, weighting):
         """
@@ -162,6 +164,7 @@ class LabelPropagator:
                     new_edge_weight[(where_1, where_2)] = self.edge_weights[(v_1, v_2)]
         
         # update
+        self.nodes_list_mask = new_nodes_list_mask
         self.node_map_mask = {node: self.labels[node] for node in self.graph.nodes()}
         # self.pre_node_weight = {node: self.node_weight[node] for node in self.graph.nodes()}
         self.graph = new_graph
@@ -176,7 +179,7 @@ class LabelPropagator:
         """
         random.seed(self.seeding)
         random.shuffle(self.nodes)
-        for node in tqdm(self.nodes):
+        for node in self.nodes:
             neighbors = nx.neighbors(self.graph, node)
             neighbors_temp = nx.neighbors(self.graph, node)
             num_neighbors = sum(1 for _ in neighbors_temp)
@@ -187,7 +190,7 @@ class LabelPropagator:
                     pick = self.make_a_pick(node, neighbors)
                 self.labels[node] = pick
         # if self.args.method == 'cost':
-        if step %1 == 0:
+        if step %5 == 0:
             self.graph_update()
         current_label_count = len(set(self.labels.values()))
         if self.label_count == current_label_count:
@@ -216,9 +219,11 @@ class LabelPropagator:
         index = 0
         # while index < self.rounds and self.flag:
         step = 1
-        while index < self.rounds:
-            index = index + 1
+        # while index < self.rounds:
+        for index in tqdm(range(self.rounds), desc='Coarsening...', leave=False):
+            # index = index + 1
             # print("\nLabel propagation round: {}; Number of labels: {}; Number of nodes: {}\n".format(index, self.label_count, len(self.nodes)))
-            self.do_a_propagation(step)
-            step += 1
+            self.do_a_propagation(index + 1)
+
+            # step += 1
         return self.graph, self.nodes_list_mask

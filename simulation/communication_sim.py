@@ -1,7 +1,17 @@
 import torch
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = "1"
+device = torch.device('cuda')
 
 def count_comm_vollum():
     return 0
+
+def _tensor_distance(tensor_A, tensor_B):
+    sub_c = torch.sub(tensor_A, tensor_B)
+    sq_sub_c = sub_c**2
+    sum_sq_sub_c = torch.sum(sq_sub_c, dim=2)
+    distance = torch.sqrt(sum_sq_sub_c)
+    return distance
 
 class Simulator():
     def __init__(self, origin_emb_str, origin_emb_tem, partition, adjs) -> None:
@@ -15,7 +25,13 @@ class Simulator():
         self.num_partitions = len(self.partition)
         self.num_snapshots = len(self.partition[0])
 
-        self._get_comm_v_index()
+        self.N = origin_emb_str.size(0)
+        self.T = origin_emb_str.size(1)
+        self.F = origin_emb_str.size(2)
+
+        self.comm_str_index = torch.ones(self.max_num_v, self.num_snapshots, dtype=torch.bool)
+        self.comm_tem_index = torch.ones(self.max_num_v, self.num_snapshots, dtype=torch.bool)
+        # self._get_comm_v_index()
 
     def count_comm_incremental(self, emb_str, emb_tem):
         str_need_comm = torch.zeros(self.max_num_v, self.num_snapshots, emb_str.size(2), dtype=torch.bool)
@@ -84,6 +100,66 @@ class Simulator():
             tem_count += count.size(0)*emb_tem.size(2)
         return str_count, tem_count
 
+    def count_comm_stale(self, emb_str, emb_tem, epoch):
+        scale_theta = 0.2 + (epoch%20)*0.1  # distance threshold
+        if scale_theta > 1:
+            scale_theta = 1
+
+        '''
+        paras:
+            emb_str: vertices spatial embeddings in current epoch
+            emb_tem: vertices temporal embeddings in current epoch
+        '''
+        str_need_not_comm = torch.zeros(self.N, self.T, dtype=torch.bool) # [N,T]
+        tem_need_not_comm = torch.zeros(self.N, self.T, dtype=torch.bool)
+        for time in range(self.T):
+            str_not_send = torch.nonzero(self.comm_str_index[:, time] == False, as_tuple=False).view(-1)
+            tem_not_send = torch.nonzero(self.comm_tem_index[:, time] == False, as_tuple=False).view(-1)
+            str_need_not_comm[str_not_send, time] = torch.ones(str_not_send.size(0), dtype=torch.bool)
+            tem_need_not_comm[tem_not_send, time] = torch.ones(tem_not_send.size(0), dtype=torch.bool)
+
+        # step 1: calculate the L2 distance between current embedding and original embeddings (the latest sent)
+        # Each embedding has the dimension of F
+        comm_str_vollume = 0
+        comm_tem_vollume = 0
+        whether_send_str = torch.zeros(self.N, self.T, dtype=torch.bool)
+        whether_send_tem = torch.zeros(self.N, self.T, dtype=torch.bool)
+        distance_str = _tensor_distance(self.emb_str_checkpoint, emb_str)
+        distance_tem = _tensor_distance(self.emb_tem_checkpoint, emb_tem)
+        for time in range(self.T):
+            str_not_send_num = torch.nonzero(str_need_not_comm[:, time] == True, as_tuple=False).view(-1)
+            tem_not_send_num = torch.nonzero(tem_need_not_comm[:, time] == True, as_tuple=False).view(-1)
+            str_not_send_mask = str_need_not_comm[:, time].to(device)
+            tem_not_send_mask = tem_need_not_comm[:, time].to(device)
+            str_send_mask = ~str_need_not_comm[:, time].to(device)
+            tem_send_mask = ~tem_need_not_comm[:, time].to(device)
+            
+            distance_str[str_not_send_mask, time] = torch.zeros(str_not_send_num.size(0), dtype=torch.float32).to(device)
+            distance_tem[tem_not_send_mask, time] = torch.zeros(tem_not_send_num.size(0), dtype=torch.float32).to(device)
+            # calculate the average distance
+            str_avg_distance = torch.mean(distance_str[str_send_mask, time])
+            tem_avg_distance = torch.mean(distance_tem[tem_send_mask, time])
+            str_threshold = str_avg_distance*scale_theta
+            tem_threshold = tem_avg_distance*scale_theta
+
+            greater_distance_str = torch.nonzero(distance_str[:, time] > str_threshold, as_tuple=False).view(-1)
+            greater_distance_tem = torch.nonzero(distance_tem[:, time] > tem_threshold, as_tuple=False).view(-1)
+            whether_send_str[greater_distance_str, time] = torch.ones(greater_distance_str.size(0), dtype=torch.bool)
+            whether_send_tem[greater_distance_tem, time] = torch.ones(greater_distance_tem.size(0), dtype=torch.bool)
+            comm_str_vollume += greater_distance_str.size(0)
+            comm_tem_vollume += greater_distance_tem.size(0)
+        
+        # update latest sent embeddings
+        for time in range(self.T):
+            self.emb_str_checkpoint[whether_send_str[:, time], time] = emb_str[whether_send_str[:, time], time]
+            self.emb_tem_checkpoint[whether_send_tem[:, time], time] = emb_tem[whether_send_tem[:, time], time]
+        
+        return comm_str_vollume*self.F, comm_tem_vollume*self.F
+
+    # def count_comm_volume(self, emb_str, emb_tem):
+    #     comm_volume_str = 0
+    #     comm_volume_tem = 0
+
     def _get_comm_v_index(self):
         self.comm_str_index = torch.zeros(self.max_num_v, self.num_snapshots, dtype=torch.bool)
         self.comm_tem_index = torch.zeros(self.max_num_v, self.num_snapshots, dtype=torch.bool)
@@ -145,4 +221,9 @@ class Simulator():
         print('need to send nodes {} {}'.format(str_count, tem_count))
 
 
-
+if __name__ == '__main__':
+    # test tensor distance calculation
+    tensor_A = torch.ones(2, 2, 2, dtype=torch.float32)
+    tensor_B = torch.zeros(2, 2, 2, dtype=torch.float32)
+    distance = _tensor_distance(tensor_A, tensor_B)
+    print(distance)

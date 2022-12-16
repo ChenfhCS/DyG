@@ -5,9 +5,12 @@ import networkx as nx
 import math
 import random
 import time
+import logging
 
 import sys 
+import os
 sys.path.append("..") 
+os.environ['CUDA_VISIBLE_DEVICES'] = "1"
 
 from tqdm import tqdm
 from data_process import load_data, generate_graphs, graph_concat
@@ -19,13 +22,29 @@ bandwidth_10MB = float(10*1024*1024*8)
 bandwidth_100MB = float(100*1024*1024*8)
 bandwidth_GB = float(1024*1024*1024*8)
 
+current_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
+path = current_path + '/method/cost_evaluator/model/'
+# device = torch.cuda.set_device(1)
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+model_str = MLP_Predictor(in_feature = 2)
+model_str.load_state_dict(torch.load(path + 'str_10.pt'))
+model_str = model_str.to(device)
+
+model_tem = MLP_Predictor(in_feature = 2)
+model_tem.load_state_dict(torch.load(path + 'tem_10.pt'))
+model_tem = model_tem.to(device)
+
+model_str.eval()
+model_tem.eval()
+
 
 class PTS():
-    def __init__(self, args, graphs, nodes_list, adjs_list, num_devices):
+    def __init__(self, args, graphs, nodes_list, adjs_list, num_devices, logger):
         self.args = args
         self.nodes_list = nodes_list
         self.adjs_list = adjs_list
         self.num_devices = num_devices
+        self.logger = logger
         self.graphs = graphs
         self.timesteps = len(nodes_list)
         self.workloads_GCN = [[torch.full_like(self.nodes_list[time], False, dtype=torch.bool) for time in range(self.timesteps)] for i in range(num_devices)]
@@ -98,28 +117,42 @@ class PTS():
         RNN_receive = [torch.cat(RNN_receive_list[i], 0).size(0) for i in range(self.num_devices)]
         RNN_send = [torch.cat(RNN_send_list[i], 0).size(0) for i in range(self.num_devices)]
 
-        GCN_comm_time = [max(GCN_receive_comm_time[i], GCN_send_comm_time[i]) for i in range(len(GCN_receive_comm_time))]
-        RNN_comm_time = [max(RNN_receive_comm_time[i], RNN_send_comm_time[i]) for i in range(len(RNN_receive_comm_time))]
+        GCN_comm_time = [round(max(GCN_receive_comm_time[i], GCN_send_comm_time[i]), 3) for i in range(len(GCN_receive_comm_time))]
+        RNN_comm_time = [round(max(RNN_receive_comm_time[i], RNN_send_comm_time[i]), 3) for i in range(len(RNN_receive_comm_time))]
         GPU_total_time = [GCN_comm_time[i] + RNN_comm_time[i] for i in range(len(GCN_comm_time))]
         # Total_time = max(GPU_total_time)
-        GCN_comp_time, ATT_comp_time = Computation_time(self.graphs, self.num_devices, len(self.nodes_list), self.workloads_GCN, self.workloads_ATT, GCN_comp_scale, ATT_comp_scale)
-        total_comp_time = [GCN_comp_time[i] + ATT_comp_time[i] for i in range(len(GCN_comm_time))]
+        GCN_comp_time, ATT_comp_time = Computation_time(self.graphs, self.num_devices, len(self.nodes_list), self.workloads_GCN, self.workloads_ATT, model_str, model_tem, device)
+        total_comp_time = [round(GCN_comp_time[i] + ATT_comp_time[i], 3) for i in range(len(GCN_comm_time))]
 
-        print('----------------------------------------------------------')
-        print('PTS method:')
-        print('GCN | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(GCN_receive, GCN_send))
-        print('ATT | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(RNN_receive, RNN_send))
-        print('Each GPU with computation time: {} ( GCN: {} | ATT: {})'.format(total_comp_time, GCN_comp_time, ATT_comp_time))
-        print('Each GPU with communication time: {} ( GCN: {} | ATT: {})'.format(GPU_total_time, GCN_comm_time, RNN_comm_time))
-        print('Total time: {} | Computation time: {}, Communication time: {}'.format(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), max(GCN_comp_time) + max(ATT_comp_time), max(GPU_total_time)))
-    
+        self.logger.info('PTS method:')
+        self.logger.info('GCN | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(GCN_receive, GCN_send))
+        self.logger.info('ATT | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(RNN_receive, RNN_send))
+        self.logger.info('Each GPU with computation time: {} ( GCN: {} | ATT: {})'.format(total_comp_time, GCN_comp_time, ATT_comp_time))
+        self.logger.info('Each GPU with communication time: {} ( GCN: {} | ATT: {})'.format(GPU_total_time, GCN_comm_time, RNN_comm_time))
+        self.logger.info('Total time: {:.3f} | Computation time: {:.3f}, Communication time: {:.3f}'.format(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), max(GCN_comp_time) + max(ATT_comp_time), max(GPU_total_time)))
+        self.logger.info('Total costs: {:.3f} | Computation costs: {:.3f}, Communication costs: {:.3f}'.format(np.sum(GPU_total_time) + np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GPU_total_time)))
+        self.logger.info('----------------------------------------------------------')
+        # print('----------------------------------------------------------')
+        # print('PTS method:')
+        # print('GCN | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(GCN_receive, GCN_send))
+        # print('ATT | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(RNN_receive, RNN_send))
+        # print('Each GPU with computation time: {} ( GCN: {} | ATT: {})'.format(total_comp_time, GCN_comp_time, ATT_comp_time))
+        # print('Each GPU with communication time: {} ( GCN: {} | ATT: {})'.format(GPU_total_time, GCN_comm_time, RNN_comm_time))
+        # print('Total time: {} | Computation time: {}, Communication time: {}'.format(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), max(GCN_comp_time) + max(ATT_comp_time), max(GPU_total_time)))
+        # print('Total costs: {} | Computation costs: {}, Communication costs: {}'.format(np.sum(GPU_total_time) + np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GPU_total_time)))
+        return round(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), 4), round(np.sum(GPU_total_time) + np.sum(GCN_comp_time) + np.sum(ATT_comp_time), 4)
+
+    def workload_distribution(self):
+        experiment_fragmentation(self.workloads_GCN, self.workloads_GCN)
+
 
 class PSS():
-    def __init__(self, args, graphs, nodes_list, adjs_list, num_devices):
+    def __init__(self, args, graphs, nodes_list, adjs_list, num_devices, logger):
         self.args = args
         self.nodes_list = nodes_list
         self.adjs_list = adjs_list
         self.num_devices = num_devices
+        self.logger = logger
         self.graphs = graphs
         self.timesteps = len(nodes_list)
         self.workloads_GCN = [[torch.full_like(self.nodes_list[time], False, dtype=torch.bool) for time in range(self.timesteps)] for i in range(num_devices)]
@@ -180,29 +213,43 @@ class PSS():
         RNN_receive = [torch.cat(RNN_receive_list[i], 0).size(0) for i in range(self.num_devices)]
         RNN_send = [torch.cat(RNN_send_list[i], 0).size(0) for i in range(self.num_devices)]
 
-        GCN_comm_time = [max(GCN_receive_comm_time[i], GCN_send_comm_time[i]) for i in range(len(GCN_receive_comm_time))]
-        RNN_comm_time = [max(RNN_receive_comm_time[i], RNN_send_comm_time[i])*2 for i in range(len(RNN_receive_comm_time))]
+        GCN_comm_time = [round(max(GCN_receive_comm_time[i], GCN_send_comm_time[i]), 3) for i in range(len(GCN_receive_comm_time))]
+        RNN_comm_time = [round(max(RNN_receive_comm_time[i], RNN_send_comm_time[i]), 3) for i in range(len(RNN_receive_comm_time))]
         GPU_total_time = [GCN_comm_time[i] + RNN_comm_time[i] for i in range(len(GCN_comm_time))]
         # Total_time = max(GPU_total_time)
-        GCN_comp_time, ATT_comp_time = Computation_time(self.graphs, self.num_devices, len(self.nodes_list), self.workloads_GCN, self.workloads_ATT, GCN_comp_scale, ATT_comp_scale)
-        total_comp_time = [GCN_comp_time[i] + ATT_comp_time[i] for i in range(len(GCN_comp_time))]
+        GCN_comp_time, ATT_comp_time = Computation_time(self.graphs, self.num_devices, len(self.nodes_list), self.workloads_GCN, self.workloads_ATT, model_str, model_tem, device)
+        total_comp_time = [round(GCN_comp_time[i] + ATT_comp_time[i], 3) for i in range(len(GCN_comp_time))]
 
-        print('----------------------------------------------------------')
-        print('PSS method:')
-        print('GCN | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(GCN_receive, GCN_send))
-        print('ATT | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(RNN_receive, RNN_send))
-        print('Each GPU with computation time: {} ( GCN: {} | ATT: {})'.format(total_comp_time, GCN_comp_time, ATT_comp_time))
-        print('Each GPU with communication time: {} ( GCN: {} | ATT: {})'.format(GPU_total_time, GCN_comm_time, RNN_comm_time))
-        print('Total time: {} | Computation time: {}, Communication time: {}'.format(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), 
-                                                                                    max(GCN_comp_time) + max(ATT_comp_time), max(GPU_total_time)))
-        
+        self.logger.info('PSS method:')
+        self.logger.info('GCN | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(GCN_receive, GCN_send))
+        self.logger.info('ATT | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(RNN_receive, RNN_send))
+        self.logger.info('Each GPU with computation time: {} ( GCN: {} | ATT: {})'.format(total_comp_time, GCN_comp_time, ATT_comp_time))
+        self.logger.info('Each GPU with communication time: {} ( GCN: {} | ATT: {})'.format(GPU_total_time, GCN_comm_time, RNN_comm_time))
+        self.logger.info('Total time: {:.3f} | Computation time: {:.3f}, Communication time: {:.3f}'.format(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), max(GCN_comp_time) + max(ATT_comp_time), max(GPU_total_time)))
+        self.logger.info('Total costs: {:.3f} | Computation costs: {:.3f}, Communication costs: {:.3f}'.format(np.sum(GPU_total_time) + np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GPU_total_time)))
+        self.logger.info('----------------------------------------------------------')
+        # print('----------------------------------------------------------')
+        # print('PSS method:')
+        # print('GCN | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(GCN_receive, GCN_send))
+        # print('ATT | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(RNN_receive, RNN_send))
+        # print('Each GPU with computation time: {} ( GCN: {} | ATT: {})'.format(total_comp_time, GCN_comp_time, ATT_comp_time))
+        # print('Each GPU with communication time: {} ( GCN: {} | ATT: {})'.format(GPU_total_time, GCN_comm_time, RNN_comm_time))
+        # print('Total time: {} | Computation time: {}, Communication time: {}'.format(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), 
+        #                                                                             max(GCN_comp_time) + max(ATT_comp_time), max(GPU_total_time)))
+        # print('Total costs: {} | Computation costs: {}, Communication costs: {}'.format(np.sum(GPU_total_time) + np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GPU_total_time)))
+        return round(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), 4), round(np.sum(GPU_total_time) + np.sum(GCN_comp_time) + np.sum(ATT_comp_time), 4)
+
+    def workload_distribution(self):
+        experiment_fragmentation(self.workloads_GCN, self.workloads_GCN)
+
 
 class PSS_TS():
-    def __init__(self, args, graphs, nodes_list, adjs_list, num_devices):
+    def __init__(self, args, graphs, nodes_list, adjs_list, num_devices, logger):
         self.args = args
         self.nodes_list = nodes_list
         self.adjs_list = adjs_list
         self.num_devices = num_devices
+        self.logger = logger
         self.graphs = graphs
         self.timesteps = len(nodes_list)
         self.workloads_GCN = [[torch.full_like(self.nodes_list[time], False, dtype=torch.bool) for time in range(self.timesteps)] for i in range(num_devices)]
@@ -301,30 +348,44 @@ class PSS_TS():
         RNN_receive = [torch.cat(RNN_receive_list[i], 0).size(0) for i in range(self.num_devices)]
         RNN_send = [torch.cat(RNN_send_list[i], 0).size(0) for i in range(self.num_devices)]
 
-        GCN_comm_time = [max(GCN_receive_comm_time[i], GCN_send_comm_time[i]) for i in range(len(GCN_receive_comm_time))]
-        RNN_comm_time = [max(RNN_receive_comm_time[i], RNN_send_comm_time[i])*2 for i in range(len(RNN_receive_comm_time))]
+        GCN_comm_time = [round(max(GCN_receive_comm_time[i], GCN_send_comm_time[i]), 3) for i in range(len(GCN_receive_comm_time))]
+        RNN_comm_time = [round(max(RNN_receive_comm_time[i], RNN_send_comm_time[i]), 3) for i in range(len(RNN_receive_comm_time))]
         GPU_total_time = [GCN_comm_time[i] + RNN_comm_time[i] for i in range(len(GCN_comm_time))]
         # Total_time = max(GPU_total_time)
-        GCN_comp_time, ATT_comp_time = Computation_time(self.graphs, self.num_devices, len(self.nodes_list), self.workloads_GCN, self.workloads_ATT, GCN_comp_scale, ATT_comp_scale)
-        total_comp_time = [GCN_comp_time[i] + ATT_comp_time[i] for i in range(len(GCN_comp_time))]
+        GCN_comp_time, ATT_comp_time = Computation_time(self.graphs, self.num_devices, len(self.nodes_list), self.workloads_GCN, self.workloads_ATT, model_str, model_tem, device)
+        total_comp_time = [round(GCN_comp_time[i] + ATT_comp_time[i], 3) for i in range(len(GCN_comp_time))]
 
-        print('----------------------------------------------------------')
-        print('PSS_TS method:')
-        print('GCN | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(GCN_receive, GCN_send))
-        print('ATT | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(RNN_receive, RNN_send))
-        print('Each GPU with computation time: {} ( GCN: {} | ATT: {})'.format(total_comp_time, GCN_comp_time, ATT_comp_time))
-        print('Each GPU with communication time: {} ( GCN: {} | ATT: {})'.format(GPU_total_time, GCN_comm_time, RNN_comm_time))
-        print('Total time: {} | Computation time: {}, Communication time: {}'.format(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), 
-                                                                                    max(GCN_comp_time) + max(ATT_comp_time), max(GPU_total_time)))
+        self.logger.info('PSS-TS method:')
+        self.logger.info('GCN | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(GCN_receive, GCN_send))
+        self.logger.info('ATT | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(RNN_receive, RNN_send))
+        self.logger.info('Each GPU with computation time: {} ( GCN: {} | ATT: {})'.format(total_comp_time, GCN_comp_time, ATT_comp_time))
+        self.logger.info('Each GPU with communication time: {} ( GCN: {} | ATT: {})'.format(GPU_total_time, GCN_comm_time, RNN_comm_time))
+        self.logger.info('Total time: {:.3f} | Computation time: {:.3f}, Communication time: {:.3f}'.format(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), max(GCN_comp_time) + max(ATT_comp_time), max(GPU_total_time)))
+        self.logger.info('Total costs: {:.3f} | Computation costs: {:.3f}, Communication costs: {:.3f}'.format(np.sum(GPU_total_time) + np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GPU_total_time)))
+        self.logger.info('----------------------------------------------------------')
+        # print('----------------------------------------------------------')
+        # print('PSS_TS method:')
+        # print('GCN | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(GCN_receive, GCN_send))
+        # print('ATT | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(RNN_receive, RNN_send))
+        # print('Each GPU with computation time: {} ( GCN: {} | ATT: {})'.format(total_comp_time, GCN_comp_time, ATT_comp_time))
+        # print('Each GPU with communication time: {} ( GCN: {} | ATT: {})'.format(GPU_total_time, GCN_comm_time, RNN_comm_time))
+        # print('Total time: {} | Computation time: {}, Communication time: {}'.format(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), 
+        #                                                                             max(GCN_comp_time) + max(ATT_comp_time), max(GPU_total_time)))
+        # print('Total costs: {} | Computation costs: {}, Communication costs: {}'.format(np.sum(GPU_total_time) + np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GPU_total_time)))
+        return round(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), 4), round(np.sum(GPU_total_time) + np.sum(GCN_comp_time) + np.sum(ATT_comp_time), 4)
+
+    def workload_distribution(self):
+        experiment_fragmentation(self.workloads_GCN, self.workloads_GCN)
 
 
 class Diana():
-    def __init__(self, args, graphs, nodes_list, adjs_list, num_devices, gcn_node_size, ATT_node_size, bandwidth, GCN_comp_scale, ATT_comp_scale):
+    def __init__(self, args, graphs, nodes_list, adjs_list, num_devices, gcn_node_size, ATT_node_size, bandwidth, logger):
         super(Diana, self).__init__()
         self.args = args
         self.nodes_list = nodes_list
         self.adjs_list = adjs_list
         self.num_devices = num_devices
+        self.logger = logger
         self.graphs = graphs
         self.timesteps = len(nodes_list)
         # self.workloads_GCN = [[torch.full_like(self.nodes_list[time], False, dtype=torch.bool) for time in range(self.timesteps)] for i in range(num_devices)]
@@ -345,23 +406,12 @@ class Diana():
         self.alpha = 0.01
         self.beta = 0.01
 
-        self.GCN_comp_scale = GCN_comp_scale
-        self.ATT_comp_scale = ATT_comp_scale
+        self.device = device
+        # self.model_str = model_str
+        # self.model_tem = model_tem
 
-        self.device = torch.device("cuda")
-        self.model_str = MLP_Predictor(in_feature = 2)
-        self.model_str.load_state_dict(torch.load('./Model_evaluation/model/str_{}.pt'.format(10)))
-        self.model_str = self.model_str.to(self.device)
-
-        self.model_tem = MLP_Predictor(in_feature = 2)
-        self.model_tem.load_state_dict(torch.load('./Model_evaluation/model/tem_{}.pt'.format(10)))
-        self.model_tem = self.model_tem.to(self.device)
-
-        self.model_str.eval()
-        self.model_tem.eval()
         self.coarsening()
         # self.cluster_id_list, self.cluster_time_list = self.clustering()
-      
         
         # print(self.workloads_GCN)
         gcn_cost = 0
@@ -374,14 +424,14 @@ class Diana():
             num_vertices = graph.number_of_nodes()
             num_edges = graph.number_of_edges()
             input = torch.Tensor([float(num_vertices/10000), float(num_edges/10000)]).to(self.device)
-            cost = self.model_str(input)
+            cost = model_str(input)
             gcn_cost += cost.item()
             if len(nodes_list) > 0:
                 full_nodes.extend(nodes_list)
                 total_time_step += 1
         full_nodes = list(set(full_nodes))
         tem_input = torch.Tensor([float(len(full_nodes)/10000), float(total_time_step/10)]).to(self.device)
-        cost = self.model_tem(tem_input)
+        cost = model_tem(tem_input)
         att_cost += cost.item()
         self.total_computation_cost = gcn_cost + att_cost
 
@@ -396,7 +446,7 @@ class Diana():
 
         # partition visiablity test without coarsening: coarsening step = 1000
         self.full_graph = graph_concat(self.graphs)
-        self.coarsened_graph, self.node_to_nodes_list = coarsener(self.args, self.graphs, self.full_graph)
+        self.coarsened_graph, self.node_to_nodes_list = coarsener(self.args, self.graphs, self.full_graph, model_str, model_tem, device)
     
     def partitioning(self, alg):
         """
@@ -405,8 +455,9 @@ class Diana():
         self.alg = alg
         num_nodes_process = 0
         # for node in self.coarsened_graph.nodes():
-        for node in tqdm(self.coarsened_graph.nodes(), desc='Partitioning...:', leave=True):
+        for node in tqdm(self.coarsened_graph.nodes(), desc='Partitioning...', leave=False):
             nodes_to_partition = self.node_to_nodes_list[node]
+            # print('node {} map to original nodes {}'.format(node, nodes_to_partition))
             # calculate the inter-device communication costs
             scores = []
             for m in range(self.num_devices):
@@ -435,6 +486,7 @@ class Diana():
                     num_node = compute_nodes.size(0)
                     inter_edges = GCN_communication + ATT_communication
                     score = inter_edges*(1-num_node/self.total_nodes)
+                    score = inter_edges+(1-num_node/self.total_nodes)
                     # score = inter_edges
                 elif alg == 'LDG_DyG':
                     gcn_cost = 0
@@ -448,13 +500,13 @@ class Diana():
                             num_vertices = graph.number_of_nodes()
                             num_edges = graph.number_of_edges()
                             input = torch.Tensor([float(num_vertices/10000), float(num_edges/10000)]).to(self.device)
-                            cost = self.model_str(input)
+                            cost = model_str(input)
                             gcn_cost += cost.item()
                             full_nodes.extend(nodes_list)
                             total_time_step += 1
                     full_nodes = list(set(full_nodes))
                     tem_input = torch.Tensor([float(len(full_nodes)/10000), float(total_time_step/10)]).to(self.device)
-                    cost = self.model_tem(tem_input)
+                    cost = model_tem(tem_input)
                     att_cost += cost.item()
 
                     # total_comp_cost = gcn_cost+att_cost
@@ -462,7 +514,7 @@ class Diana():
                     inter_communication = ((GCN_communication*self.gcn_node_size + ATT_communication*self.ATT_node_size)/self.bandwidth)
                     # inter_communication = GCN_communication + ATT_communication
                     # score = inter_communication*(1-(gcn_cost+att_cost)/self.total_computation_cost)
-                    score = 10*inter_communication+(1-(gcn_cost+att_cost)/self.total_computation_cost)
+                    score = inter_communication+(1-(gcn_cost+att_cost)/self.total_computation_cost)
                 elif alg == 'Fennel_base':
                     alpha = 3
                     beta = 1.5
@@ -485,39 +537,6 @@ class Diana():
                     num_nodes_process += 1
                     self.workloads_GCN[select_m][t][nodes] = torch.ones(len(nodes), dtype=torch.bool)
                     self.workloads_ATT[select_m][t][nodes] = torch.ones(len(nodes), dtype=torch.bool)
-                    # assigin attribute
-                    attr = {node: {'partition': select_m}}
-                    nx.set_node_attributes(self.coarsened_graph, attr)
-        # print(num_nodes_process)
-        # plot
-        # step 1: remove temporal links
-        temporal_edges = []
-        for edge in self.coarsened_graph.edges():
-            if self.coarsened_graph.edges[edge]["type"] == 'tem':
-                temporal_edges.append(edge)
-        self.coarsened_graph.remove_edges_from(temporal_edges)
-
-        # step 2: define node position
-        pos_list = [(random.uniform(0, 2), random.uniform(0, 2)) for _ in self.coarsened_graph.nodes()]
-        # for node in coarsened_graph.nodes():
-        # original_nodes_pos = {node: pos_list[node_mask[node].item()] for node in full_graph.nodes()}
-        original_nodes_pos = {}
-        for node in self.coarsened_graph.nodes():
-            pos_tem = list(pos_list[self.coarsened_graph.nodes[node]['orig_id']])
-            pos_tem[0] += (self.coarsened_graph.nodes[node]['snap_id'][0]*3)
-            original_nodes_pos[node] = tuple(pos_tem)
-
-        # step 3: degine node colors
-        colorArr = ['1','2','3','4','5','6','7','8','9','A','B','C','D','E','F']
-        color_list = []
-        print([self.coarsened_graph.nodes[node]['partition'] for node in self.coarsened_graph.nodes()])
-        for num_color in range(self.num_devices):
-            color = ""
-            for i in range(6):
-                color += colorArr[random.randint(0,14)]
-            color_list.append("#"+color)
-        node_color_mask = {node: self.coarsened_graph.nodes[node]['partition'] for node in self.coarsened_graph.nodes()}
-        node_color = [color_list[node_color_mask[node]] for node in self.coarsened_graph.nodes()]
 
         # plot_graph(args, self.coarsened_graph, node_color, 'black', original_nodes_pos, 'partition')
     def communication_time(self, GCN_node_size, ATT_node_size, bandwidth, GCN_comp_scale, ATT_comp_scale):
@@ -549,62 +568,82 @@ class Diana():
         ATT_send = [torch.cat(ATT_send_list[i], 0).size(0) for i in range(self.num_devices)]
         Sperate_time = time.time() - start
         
-        GCN_comm_time = [max(GCN_receive_comm_time[i], GCN_send_comm_time[i]) for i in range(len(GCN_receive_comm_time))]
-        ATT_comm_time = [max(ATT_receive_comm_time[i], ATT_send_comm_time[i]) for i in range(len(ATT_receive_comm_time))]
+        GCN_comm_time = [round(max(GCN_receive_comm_time[i], GCN_send_comm_time[i]), 3) for i in range(len(GCN_receive_comm_time))]
+        ATT_comm_time = [round(max(ATT_receive_comm_time[i], ATT_send_comm_time[i]), 3) for i in range(len(ATT_receive_comm_time))]
         GPU_total_time = [GCN_comm_time[i] + ATT_comm_time[i] for i in range(len(GCN_comm_time))]
         # Total_time = max(GPU_total_time)
 
         start = time.time()
-        GCN_comp_time, ATT_comp_time = Computation_time(self.graphs, self.num_devices, len(self.nodes_list), self.workloads_GCN, self.workloads_ATT, GCN_comp_scale, ATT_comp_scale)
+        GCN_comp_time, ATT_comp_time = Computation_time(self.graphs, self.num_devices, len(self.nodes_list), self.workloads_GCN, self.workloads_ATT, model_str, model_tem, device)
         Comp_time = time.time() - start
-        total_comp_time = [GCN_comp_time[i] + ATT_comp_time[i] for i in range(len(GCN_comm_time))]
+        total_comp_time = [round(GCN_comp_time[i] + ATT_comp_time[i], 3) for i in range(len(GCN_comm_time))]
         # print('ATT get node cost: {:.3f}, GNN get node cost: {:.3f}, communication cost: {:.3f}, sperate cost: {:.3f}, computation cost: {:.3f}'.format(ATT_get_node_time,
         #                                                                                                 GCN_get_node_time,
         #                                                                                                 Communication_time,
         #                                                                                                 Sperate_time,
         #                                                                                                 Comp_time))
 
-        print('----------------------------------------------------------')
-        print('Diana + {}:'.format(self.alg))
-        print('Original graph size V: {}, E: {} -> coarsened graph size V: {}, E: {}'.format(self.full_graph.number_of_nodes(), self.full_graph.number_of_edges(),
+        self.logger.info('Diana + {}:'.format(self.alg))
+        self.logger.info('Original graph size V: {}, E: {} -> coarsened graph size V: {}, E: {}'.format(self.full_graph.number_of_nodes(), self.full_graph.number_of_edges(),
                                                                                                 self.coarsened_graph.number_of_nodes(), self.coarsened_graph.number_of_edges()))
-        # print('Number of clusters: ', len(self.cluster_id_list))
-        print('GCN | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(GCN_receive, GCN_send))
-        print('ATT | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(ATT_receive, ATT_send))
-        print('Each GPU with computation time: {} ( GCN: {} | ATT: {})'.format(total_comp_time, GCN_comp_time, ATT_comp_time))
-        print('Each GPU with communication time: {} ( GCN: {} | ATT: {})'.format(GPU_total_time, GCN_comm_time, ATT_comm_time))
-        print('Total time: {} | Computation time: {}, Communication time: {}'.format(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), max(GCN_comp_time) + max(ATT_comp_time), max(GPU_total_time)))
-        print('Total costs: {} | Computation costs: {}, Communication costs: {}'.format(np.sum(GPU_total_time) + np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GPU_total_time)))
+        self.logger.info('GCN | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(GCN_receive, GCN_send))
+        self.logger.info('ATT | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(ATT_receive, ATT_send))
+        self.logger.info('Each GPU with computation time: {} ( GCN: {} | ATT: {})'.format(total_comp_time, GCN_comp_time, ATT_comp_time))
+        self.logger.info('Each GPU with communication time: {} ( GCN: {} | ATT: {})'.format(GPU_total_time, GCN_comm_time, ATT_comm_time))
+        self.logger.info('Total time: {:.3f} | Computation time: {:.3f}, Communication time: {:.3f}'.format(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), max(GCN_comp_time) + max(ATT_comp_time), max(GPU_total_time)))
+        self.logger.info('Total costs: {:.3f} | Computation costs: {:.3f}, Communication costs: {:.3f}'.format(np.sum(GPU_total_time) + np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GPU_total_time)))
+        self.logger.info('----------------------------------------------------------')
+        # print('----------------------------------------------------------')
+        # print('Diana + {}:'.format(self.alg))
+        # print('Original graph size V: {}, E: {} -> coarsened graph size V: {}, E: {}'.format(self.full_graph.number_of_nodes(), self.full_graph.number_of_edges(),
+        #                                                                                         self.coarsened_graph.number_of_nodes(), self.coarsened_graph.number_of_edges()))
+        # # print('Number of clusters: ', len(self.cluster_id_list))
+        # print('GCN | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(GCN_receive, GCN_send))
+        # print('ATT | Each GPU receives nodes: {} | Each GPU sends nodes: {}'.format(ATT_receive, ATT_send))
+        # print('Each GPU with computation time: {} ( GCN: {} | ATT: {})'.format(total_comp_time, GCN_comp_time, ATT_comp_time))
+        # print('Each GPU with communication time: {} ( GCN: {} | ATT: {})'.format(GPU_total_time, GCN_comm_time, ATT_comm_time))
+        # print('Total time: {} | Computation time: {}, Communication time: {}'.format(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), max(GCN_comp_time) + max(ATT_comp_time), max(GPU_total_time)))
+        # print('Total costs: {} | Computation costs: {}, Communication costs: {}'.format(np.sum(GPU_total_time) + np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GCN_comp_time) + np.sum(ATT_comp_time), np.sum(GPU_total_time)))
+        return round(max(GPU_total_time) + max(GCN_comp_time) + max(ATT_comp_time), 4), round(np.sum(GPU_total_time) + np.sum(GCN_comp_time) + np.sum(ATT_comp_time), 4)
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Test parameters')
-    # for experimental configurations
-    parser.add_argument('--featureless', type=bool, default= True,
-                        help='generate feature with one-hot encoding')
-    parser.add_argument('--timesteps', type=int, nargs='?', default=8,
-                    help="total time steps used for train, eval and test")
-    parser.add_argument('--world_size', type=int, default=2,
-                        help='method for DGNN training')
-    parser.add_argument('--dataset', type=str, default='Epinion',
-                        help='method for DGNN training')
-    parser.add_argument('--real', type=str, nargs='?', default='True',
-                    help='Whether use the real graph')
-    args = vars(parser.parse_args())
+    def workload_distribution(self):
+        experiment_fragmentation(self.nodes_list, self.workloads_GCN, self.workloads_GCN)
 
-    # print(args['real'])
-    if args['real'] == 'False':
-        # validation
-        nodes_list, adjs_list = generate_test_graph()
-        graphs = [nx.complete_graph(nodes_list[i].size(0)) for i in range(len(nodes_list))]
-        time_steps = len(graphs)
-        GCN_node_size = 25600
-        RNN_node_size = 12800
-        Degrees = [list(dict(nx.degree(graphs[t])).values()) for t in range(time_steps)]
-        print('Number of graphs: ', len(graphs))
-        print('Number of features: ', GCN_node_size)
-        print('Average degrees: ', [np.mean(Degrees[t]) for t in range(time_steps)])
+    def get_partition(self):
+        return self.workloads_GCN, self.workloads_ATT
 
-    else:
+def experiments(datasets, world_sizes):
+    PSS_results = []
+    PSS_costs = []
+    PTS_results = []
+    PTS_costs = []
+    PSS_TS_results = []
+    PSS_TS_costs = []
+    PGC_results = []
+    PGC_costs = []
+
+    # log config
+    current_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
+    log_file = current_path + '/log/example_experiment.log'
+    logging.basicConfig(filename=log_file,
+                        filemode='a',
+                        format='%(message)s',
+                        level=logging.INFO)
+    # logging.basicConfig(level=logging.INFO, format='%(message)s')
+    logger = logging.getLogger('example')
+
+    for dataset in datasets:
+        PSS_out = []
+        PSS_cost = []
+        PTS_out = []
+        PTS_cost = []
+        PSS_TS_out = []
+        PSS_TS_cost = []
+        PGC_out = []
+        PGC_cost = []
+
+        args['dataset'] = dataset
+        args['timesteps'] = 10
         raw_graphs = load_data(args)
         graphs = raw_graphs
         _, raw_adj, raw_feats, num_feats = generate_graphs(args, graphs)
@@ -612,28 +651,22 @@ if __name__ == '__main__':
         # print('Generate graphs!')
         start = len(graphs) - args['timesteps']
         # print(len(graph), args['time_steps'], start)
-
         graphs = graphs[start:]
-
         Num_nodes = args['nodes_info']
         Num_edges = args['edges_info']
         time_steps = len(graphs)
-
         nodes_list = [torch.tensor([j for j in range(Num_nodes[i])]) for i in range(time_steps)]
         # nodes_list = [torch.tensor([j for j in range(Num_nodes[i])]) for i in time_idx]
         # print('Generate nodes list!')
-
         adjs_list = []
-        for i in range(time_steps):
+        for k in range(time_steps):
             # print(type(adj_matrices[i]))
-            adj_coo = raw_adj[i].tocoo()
+            adj_coo = raw_adj[k].tocoo()
             values = adj_coo.data
             indices = np.vstack((adj_coo.row, adj_coo.col))
-
             i = torch.LongTensor(indices)
             v = torch.FloatTensor(values)
             shape = adj_coo.shape
-
             adj_tensor_sp = torch.sparse_coo_tensor(i, v, torch.Size(shape))
             adjs_list.append(adj_tensor_sp)
         Degrees = [list(dict(nx.degree(graphs[t])).values()) for t in range(time_steps)]
@@ -645,31 +678,215 @@ if __name__ == '__main__':
         print('Node distribution: ', Num_nodes)
         print('Edge distribution: ', Num_edges)
         print('Average degrees: ', [np.mean(Degrees[t]) for t in range(time_steps)])
+        for world_size in world_sizes:
+            logger.info('----------------Dataset: {} Timesteps: {} world_size: {}----------------'.format(dataset, args['timesteps'], world_size))
+            args['world_size'] = world_size
 
-        # GCN_node_size = raw_feats[0].size(1)*32*
-        GCN_node_size = 128*32
-        RNN_node_size = 128*32
+            # GCN_node_size = raw_feats[0].size(1)*32*
+            GCN_node_size = 128*32
+            RNN_node_size = 128*32
+
+            PTS_obj = PTS(args, graphs, nodes_list, adjs_list, args['world_size'], logger)
+            out1, cost1 = PTS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_GB, GCN_comp_scale, ATT_comp_scale)
+            PTS_out.append(out1)
+            PTS_cost.append(cost1)
+
+            PSS_obj = PSS(args, graphs, nodes_list, adjs_list, args['world_size'], logger)
+            out2, cost2 = PSS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_GB, GCN_comp_scale, ATT_comp_scale)
+            PSS_out.append(out2)
+            PSS_cost.append(cost2)
+
+            PSS_TS_obj = PSS_TS(args, graphs, nodes_list, adjs_list, args['world_size'], logger)
+            out3, cost3 = PSS_TS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_GB, GCN_comp_scale, ATT_comp_scale)
+            PSS_TS_out.append(out3)
+            PSS_TS_cost.append(cost3)
+            # print(PSS_obj.workloads_ATT[0][1], PSS_TS_obj.workloads_ATT[0][1])
+
+            Diana_obj = Diana(args, graphs, nodes_list, adjs_list, args['world_size'], GCN_node_size, RNN_node_size, bandwidth_GB, logger)
+            Diana_obj.partitioning('LDG_base')
+            out4, cost4 = Diana_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_GB, GCN_comp_scale, ATT_comp_scale)
+            PGC_out.append(out4)
+            PGC_cost.append(cost4)
+            print('----------------Dataset: {} world_size: {}----------------'.format(dataset, world_size))
+            print('PTS results: {:.3f} | costs: {:.3f}'.format(out1, cost1))
+            print('PSS results: {:.3f} | costs: {:.3f}'.format(out2, cost2))
+            print('PSS-TS results: {:.3f} | costs: {:.3f}'.format(out3, cost3))
+            print('PGC results: {:.3f} | costs: {:.3f}'.format(out4, cost4))
+            print('---------------------------------------------------------------')
+
+            logger.info('\n')
+        PSS_results.append(PSS_out)
+        PSS_costs.append(PSS_cost)
+        PTS_results.append(PTS_out)
+        PTS_costs.append(PTS_cost)
+        PSS_TS_results.append(PSS_TS_out)
+        PSS_TS_costs.append(PSS_TS_cost)
+        PGC_results.append(PGC_out)
+        PGC_costs.append(PGC_cost)
+    print('----------------------experiments results----------------------')
+    print('\n')
+    print('PTS (temporal-sequence) results: {} | costs: {}'.format(PTS_results, PTS_costs))
+    print('\n')
+    print('PSS (spatial-snapshot) results: {} | costs: {}'.format(PSS_results, PSS_costs))
+    print('\n')
+    print('PSS_TS results: {} | costs: {}'.format(PSS_TS_results, PSS_TS_costs))
+    print('\n')
+    print('PGC results: {} | costs: {}'.format(PGC_results, PGC_costs))
+
+def experiment_fragmentation(node_list, spatial_workloads, temporal_workloads):
+    num_device = len(spatial_workloads)
+    time_steps = len(spatial_workloads[0])
+
+    spatial_distribution = [[] for m in range(num_device)]
+    temporal_distribution = [[] for m in range(num_device)]
+
+    for m in range(num_device):
+        spatial_workload = spatial_workloads[m]
+        temporal_workload = temporal_workloads[m]
+        # get spatial workload distribution
+        for t in range(time_steps):
+            workload = spatial_workload[t]
+            workload_size = torch.nonzero(workload == True, as_tuple=False).view(-1).size(0)
+            if workload_size > 0:
+                spatial_distribution[m].append(workload_size)
+        # get temporal workload distribution
+        sequence_lengths = torch.tensor([0 for i in range(node_list[-1].size(0))], dtype=torch.int32)
+        for t in range(time_steps):
+            for part in range(t+1):
+                if part == 0:
+                    workload = temporal_workload[t][:node_list[part].size(0)]
+                    had_workload = torch.nonzero(workload == True, as_tuple=False).view(-1)
+                else:
+                    workload = temporal_workload[t][node_list[part - 1].size(0) : node_list[part].size(0)]
+                    had_workload = torch.nonzero(workload == True, as_tuple=False).view(-1)
+                    had_workload = torch.add(had_workload, node_list[part - 1].size(0))
+                # had_workload = torch.nonzero(workload == True, as_tuple=False).view(-1)
+                # print('had nodes: ', had_workload.size(0))
+                sequence_lengths[had_workload] = torch.tensor([(t+1)-part for i in range(had_workload.size(0))], dtype=torch.int32)
+            # workload = temporal_workload[t]
+            # had_workload = torch.nonzero(workload == True, as_tuple=False).view(-1)
+            # sequence_lengths[had_workload] = torch.tensor([t+1 for i in range(had_workload.size(0))], dtype=torch.int32)
+        lengths_positive = torch.nonzero(sequence_lengths, as_tuple=False).view(-1)
+        sequence_lengths_positive = sequence_lengths[lengths_positive].tolist()
+        temporal_distribution[m].extend(sequence_lengths_positive)
+    
+    for m in range(num_device):
+        print('GPU {} has: spatial workloads {} | temporal workloads {}'.format(m, spatial_distribution[m], len(temporal_distribution[m])))
+        print('\n')
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Test parameters')
+    # for experimental configurations
+    parser.add_argument('--featureless', type=bool, default= True,
+                        help='generate feature with one-hot encoding')
+    parser.add_argument('--timesteps', type=int, nargs='?', default=15,
+                    help="total time steps used for train, eval and test")
+    parser.add_argument('--world_size', type=int, default=2,
+                        help='method for DGNN training')
+    parser.add_argument('--dataset', type=str, default='Epinion',
+                        help='method for DGNN training')
+    parser.add_argument('--real', type=str, nargs='?', default='True',
+                    help='Whether use the real graph')
+    args = vars(parser.parse_args())
+
+    # print(args['real'])
+    # if args['real'] == 'False':
+    #     # validation
+    #     nodes_list, adjs_list = generate_test_graph()
+    #     graphs = [nx.complete_graph(nodes_list[i].size(0)) for i in range(len(nodes_list))]
+    #     time_steps = len(graphs)
+    #     GCN_node_size = 25600
+    #     RNN_node_size = 12800
+    #     Degrees = [list(dict(nx.degree(graphs[t])).values()) for t in range(time_steps)]
+    #     print('Number of graphs: ', len(graphs))
+    #     print('Number of features: ', GCN_node_size)
+    #     print('Average degrees: ', [np.mean(Degrees[t]) for t in range(time_steps)])
+
+    # else:
+    #     raw_graphs = load_data(args)
+    #     graphs = raw_graphs
+    #     _, raw_adj, raw_feats, num_feats = generate_graphs(args, graphs)
+    #     total_graphs = len(graphs)
+    #     # print('Generate graphs!')
+    #     start = len(graphs) - args['timesteps']
+    #     # print(len(graph), args['time_steps'], start)
+
+    #     graphs = graphs[start:]
+
+    #     Num_nodes = args['nodes_info']
+    #     Num_edges = args['edges_info']
+    #     time_steps = len(graphs)
+
+    #     nodes_list = [torch.tensor([j for j in range(Num_nodes[i])]) for i in range(time_steps)]
+    #     # nodes_list = [torch.tensor([j for j in range(Num_nodes[i])]) for i in time_idx]
+    #     # print('Generate nodes list!')
+
+    #     adjs_list = []
+    #     for i in range(time_steps):
+    #         # print(type(adj_matrices[i]))
+    #         adj_coo = raw_adj[i].tocoo()
+    #         values = adj_coo.data
+    #         indices = np.vstack((adj_coo.row, adj_coo.col))
+
+    #         i = torch.LongTensor(indices)
+    #         v = torch.FloatTensor(values)
+    #         shape = adj_coo.shape
+
+    #         adj_tensor_sp = torch.sparse_coo_tensor(i, v, torch.Size(shape))
+    #         adjs_list.append(adj_tensor_sp)
+    #     Degrees = [list(dict(nx.degree(graphs[t])).values()) for t in range(time_steps)]
+    #     # Degrees = [list(dict(nx.degree(graphs[t])).values()) for t in time_idx]
+    #     print('Number of total graphs ', total_graphs)
+    #     print('Number of used graphs: ', len(graphs))
+    #     print('Number of nodes: ', nodes_list[-1].size(0))
+    #     print('Number of features: ', raw_feats[0].size(1))
+    #     print('Node distribution: ', Num_nodes)
+    #     print('Edge distribution: ', Num_edges)
+    #     print('Average degrees: ', [np.mean(Degrees[t]) for t in range(time_steps)])
+
+    #     # GCN_node_size = raw_feats[0].size(1)*32*
+    #     GCN_node_size = 128*32
+    #     RNN_node_size = 128*32
     
     GCN_comp_scale = 4*math.pow(10, -5)
     ATT_comp_scale = 4*math.pow(10, -5)
 
-    # start = 15
+    # start = 0
     # window = 5
     # nodes_list = nodes_list[start: start+window]
     # adjs_list = adjs_list[start: start+window]
 
-    # # # balance methods
 
-    PTS_obj = PTS(args, graphs, nodes_list, adjs_list, args['world_size'])
-    PTS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_100MB, GCN_comp_scale, ATT_comp_scale)
+    # # log config
+    # current_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
+    # log_file = current_path + '/log/example.log'
+    # logging.basicConfig(filename=log_file,
+    #                     filemode='a',
+    #                     format='%(message)s',
+    #                     level=logging.INFO)
+    # # logging.basicConfig(level=logging.INFO, format='%(message)s')
+    # logger = logging.getLogger('example')
+    # logger.info('----------------Dataset: {} Timesteps: {} world_size: {}----------------'.format(args['dataset'], args['timesteps'], args['world_size']))
 
-    PSS_obj = PSS(args, graphs, nodes_list, adjs_list, args['world_size'])
-    PSS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_100MB, GCN_comp_scale, ATT_comp_scale)
+    # # # # balance methods
 
-    PSS_TS_obj = PSS_TS(args, graphs, nodes_list, adjs_list, args['world_size'])
-    PSS_TS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_100MB, GCN_comp_scale, ATT_comp_scale)
-    # print(PSS_obj.workloads_ATT[0][1], PSS_TS_obj.workloads_ATT[0][1])
+    # PTS_obj = PTS(args, graphs, nodes_list, adjs_list, args['world_size'], logger)
+    # PTS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_100MB, GCN_comp_scale, ATT_comp_scale)
+    # # PTS_obj.workload_distribution()
 
-    # Diana_obj = Diana(args, graphs, nodes_list, adjs_list, args['world_size'], GCN_node_size, RNN_node_size, bandwidth_10MB, GCN_comp_scale, ATT_comp_scale)
-    # Diana_obj.partitioning('LDG_DyG')
+    # PSS_obj = PSS(args, graphs, nodes_list, adjs_list, args['world_size'], logger)
+    # PSS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_100MB, GCN_comp_scale, ATT_comp_scale)
+    # # PSS_obj.workload_distribution()
+
+    # PSS_TS_obj = PSS_TS(args, graphs, nodes_list, adjs_list, args['world_size'], logger)
+    # PSS_TS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_100MB, GCN_comp_scale, ATT_comp_scale)
+    # # print(PSS_obj.workloads_ATT[0][1], PSS_TS_obj.workloads_ATT[0][1])
+
+    # Diana_obj = Diana(args, graphs, nodes_list, adjs_list, args['world_size'], GCN_node_size, RNN_node_size, bandwidth_10MB, GCN_comp_scale, ATT_comp_scale, logger)
+    # Diana_obj.partitioning('LDG_base')
     # Diana_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_10MB, GCN_comp_scale, ATT_comp_scale)
+    # Diana_obj.workload_distribution()
+
+    # logger.info('\n')
+
+    experiments(datasets=['Amazon', 'Epinion', 'Movie', 'Stack'], world_sizes=[2, 3, 4, 8, 16, 24, 32])

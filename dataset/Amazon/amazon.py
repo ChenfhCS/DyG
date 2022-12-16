@@ -3,13 +3,16 @@ import networkx as nx
 import torch
 import scipy.sparse as sp
 import os, sys
+sys.path.append("..") 
+current_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
 
 from tqdm import tqdm
-from ..DynamicGraphTemporalSignal import DynamicGraphTemporalSignal
+from ..DynamicGraphSignal import DynamicGraphTemporalSignal
 
 # sys.path.append("..")
 # import DynamicGraphTemporalSignal
 from ..util import generate_degree_feats, create_edge_samples
+
 
 class AmazonDatasetLoader(object):
     """A dataset of mobility and history of reported cases of Epinion
@@ -27,7 +30,6 @@ class AmazonDatasetLoader(object):
         self._load_graph()
 
     def _load_graph(self):
-        current_path = os.getcwd()
         graph_path = current_path + '/dataset/Amazon/data/graphs.npz'
         self._dataset = np.load(graph_path, allow_pickle=True, encoding='latin1')['graph'][10: 10+self.timesteps]
 
@@ -109,6 +111,7 @@ class AmazonDatasetLoader(object):
         return dataset
 
 if __name__ == '__main__':
+    current_path = os.getcwd()
     dataset = AmazonDatasetLoader()
     dataset._get_edges_and_weights()
     print('_get_edges_and_weights() Pass!')
