@@ -48,7 +48,7 @@ class AmazonDatasetLoader(object):
     
     def _get_features(self):
         self.features = []
-        current_path = os.getcwd()
+        print('current path:', current_path)
         feats_path = current_path + "/dataset/Amazon/data/eval_{}_feats/".format(str(len(self._dataset)))
         # print(feats_path)
         try:

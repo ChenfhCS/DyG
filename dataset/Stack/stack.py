@@ -47,7 +47,6 @@ class StackDatasetLoader(object):
     
     def _get_features(self):
         self.features = []
-        current_path = os.getcwd()
         feats_path = current_path + "/dataset/Stack/data/eval_{}_feats/".format(str(len(self._dataset)))
         # print(feats_path)
         try:

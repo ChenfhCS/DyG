@@ -31,8 +31,8 @@ class My_Model(torch.nn.Module):
         self.dgnn = DySAT(args, num_features = node_features)
         self.classifier = classifier(in_feature = 16)
 
-    def forward(self, snapshots, samples, epoch = 0):
-        str_emb, final_emb = self.dgnn(snapshots, epoch=epoch)
+    def forward(self, snapshots, samples):
+        str_emb, final_emb = self.dgnn(snapshots)
         outputs = []
         for time, snapshot in enumerate(snapshots):
             emb = final_emb[:, time, :].to(self.args['device'])
@@ -166,7 +166,7 @@ def _set_env(rank):
 
     # init the communication group
     dist_init_method = 'tcp://{master_ip}:{master_port}'.format(
-            master_ip='127.0.0.1', master_port='12345')
+            master_ip='127.0.0.1', master_port='12346')
     torch.distributed.init_process_group(backend = Comm_backend,
                                          init_method = dist_init_method,
                                          world_size = world_size,
