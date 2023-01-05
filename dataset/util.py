@@ -31,7 +31,7 @@ def create_edge_samples(graph, val_mask_fraction=0.1, test_mask_fraction=0.1):
     """
     edges = np.array(list(nx.Graph(graph).edges()))
     edges_positive = []   # Constraint to restrict new links to existing nodes.
-    Num_of_edges = 10000
+    Num_of_edges = 1000
     for idx, e in enumerate(edges):
         if idx <= Num_of_edges:
         # if next_graph.has_edge(e[0], e[1]) and idx <= Num_of_edges:
@@ -60,7 +60,7 @@ def _negative_sample(edges_pos, nodes_num, graph):
         edges_neg.append([idx_i, idx_j])
     return edges_neg
 
-def train_test_split(sample_pos, sample_neg, train_ratio: float = 0.8):
+def train_test_split(sample_pos, sample_neg, train_ratio: float = 0.6):
     num_train_samples_pos = int(len(sample_pos) * train_ratio)
     num_train_samples_neg = int(len(sample_neg) * train_ratio)
 

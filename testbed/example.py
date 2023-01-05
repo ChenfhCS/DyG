@@ -29,8 +29,8 @@ class My_Model(torch.nn.Module):
         self.dgnn = DySAT(args, num_features = node_features)
         self.classifier = classifier(in_feature = 16)
 
-    def forward(self, snapshots, samples):
-        str_emb, final_emb = self.dgnn(snapshots)
+    def forward(self, snapshots, samples, epoch = 0):
+        str_emb, final_emb = self.dgnn(snapshots, epoch=epoch)
         outputs = []
         for time, snapshot in enumerate(snapshots):
             emb = final_emb[:, time, :].to(self.args['device'])
@@ -49,16 +49,16 @@ def _get_args():
     parser = argparse.ArgumentParser(description='example settings')
     
     # for experimental configurations
-    parser.add_argument('--timesteps', type=int, nargs='?', default=10,
-                    help="total time steps used for train, eval and test")
-    parser.add_argument('--epochs', type=int, nargs='?', default=200,
-                    help="total number of epochs")
-    parser.add_argument('--world_size', type=int, default=2,
-                        help='method for DGNN training')
     parser.add_argument('--dataset', type=str, default='Amazon',
                         help='method for DGNN training')
-    parser.add_argument('--trace', action='store_true')
-    parser.set_defaults(trace=False)
+    parser.add_argument('--timesteps', type=int, nargs='?', default=15,
+                    help="total time steps used for train, eval and test")
+    parser.add_argument('--epochs', type=int, nargs='?', default=500,
+                    help="total number of epochs")
+    parser.add_argument('--experiments', type=str, nargs='?', required=True,
+                    help="experiment type")
+    parser.add_argument('--world_size', type=int, default=2,
+                        help='method for DGNN training')
     args = vars(parser.parse_args())
     return args
 
@@ -90,7 +90,11 @@ def _save_log(args, loss_log, acc_log):
     df_acc.to_csv('./log/{}_{}_acc.csv'.format(args['dataset'], args['timesteps']), header=False)
 
 def run_example(args):
-    print('dataset: {} timesteps: {}'.format(args['dataset'], args['timesteps']))
+    # print hyper-parameters
+    print(args)
+    # print('dataset: {} timesteps: {}'.format(args['dataset'], args['timesteps']))
+    # print('Node lists: ', [snapshot.raw_graph.number_of_nodes() for snapshot in snapshots])
+
     args['rank'] = 0
     args['device'] = torch.device("cuda")
     # args['device'] = 'cpu'
@@ -106,6 +110,8 @@ def run_example(args):
         raise ValueError("No such dataset...")
     dataset = loader.get_dataset()
     snapshots = [snapshot for snapshot in dataset]
+    for graph in snapshots:
+        graph = graph.to(args['device'])
     model = My_Model(args, node_features = 2).to(args['device'])
 
     _, partition, adjs = _get_partitions(snapshots)
@@ -113,19 +119,12 @@ def run_example(args):
     loss_func = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.001)
 
-    pre_str_emb = []
-    cur_str_emb = []
-    pre_tem_emb = []
-    cur_tem_emb = []
     acc_log = []
     loss_log = []
-    print([snapshot.raw_graph.number_of_nodes() for snapshot in snapshots])
+    best_acc = 0
     # print('features: ', snapshots[0].x[80:90])
-    pbar = tqdm(range(args['epochs']), leave=False)
+    # pbar = tqdm(range(args['epochs']), leave=False)
 
-    if args['trace']:
-        import wandb
-        wandb.init(project="DGNN_GPU_utilization", entity="fahao", name='Movie_12')
     for epoch in range(args['epochs']):
         model.train()
         loss = 0
@@ -134,22 +133,21 @@ def run_example(args):
 
         gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
 
-        if epoch in [10-1, 50-1, 100-1, 150-1]:
-            pre_str_emb.append(structural_outputs[:300, -1, :].detach().cpu().tolist())
-            pre_tem_emb.append(temporal_outputs[:300, -1, :].detach().cpu().tolist())
-        if epoch in [10, 50, 100, 150]:
-            cur_str_emb.append(structural_outputs[:300, -1, :].detach().cpu().tolist())
-            cur_tem_emb.append(temporal_outputs[:300, -1, :].detach().cpu().tolist())
+        # if epoch in [10-1, 50-1, 100-1, 150-1]:
+        #     pre_str_emb.append(structural_outputs[:300, -1, :].detach().cpu().tolist())
+        #     pre_tem_emb.append(temporal_outputs[:300, -1, :].detach().cpu().tolist())
+        # if epoch in [10, 50, 100, 150]:
+        #     cur_str_emb.append(structural_outputs[:300, -1, :].detach().cpu().tolist())
+        #     cur_tem_emb.append(temporal_outputs[:300, -1, :].detach().cpu().tolist())
 
         # communication simulation
-        if epoch == 0:
-            simulator = Simulator(structural_outputs, temporal_outputs, partition, adjs)
-            # print('communication vertex index: {}{}'.format(simulator.comm_str_index, simulator.comm_tem_index))
-        else:
-            original_comm_str, original_comm_tem = simulator.count_comm(structural_outputs, temporal_outputs)
-            # increment_comm_str, increment_comm_tem = simulator.count_comm_incremental(structural_outputs, temporal_outputs)
-            stale_comm_str, stale_comm_tem = simulator.count_comm_stale(structural_outputs, temporal_outputs, epoch)
-            print(original_comm_str, original_comm_tem, stale_comm_str, stale_comm_tem)
+        # if epoch == 0:
+        #     simulator = Simulator(structural_outputs, temporal_outputs, partition, adjs)
+        # else:
+        #     original_comm_str, original_comm_tem = simulator.count_comm(structural_outputs, temporal_outputs)
+        #     stale_comm_str, stale_comm_tem = simulator.count_comm_stale(structural_outputs, temporal_outputs, epoch)
+        #     reduced_str_comm.append((original_comm_str-stale_comm_str)/original_comm_str)
+        #     reduced_tem_comm.append((original_comm_tem-stale_comm_tem)/original_comm_tem)
 
         for time, snapshot in enumerate(snapshots):
             y = outputs[time]
@@ -176,44 +174,225 @@ def run_example(args):
                 prob_auc = []   
                 prob_f1.extend(np.argmax(y.detach().cpu().numpy(), axis = 1))
                 ACC += sum(prob_f1 == label)/len(label)
-            acc_log.append(ACC/len(snapshots))
-        print('epoch: {} loss: {:.4f} acc: {:.4f} GPU memory {:.3f}'.format(epoch, loss.item(), ACC/len(snapshots), gpu_mem_alloc))
+            acc = ACC/len(snapshots)
+            acc_log.append(acc)
+            if best_acc <= acc:
+                best_acc = acc
+        print('epoch: {} loss: {:.4f} acc: {:.4f} GPU memory {:.3f}'.format(epoch, loss.item(), acc, gpu_mem_alloc))
+    print('best accuracy: {:.3f}'.format(best_acc))
+    
+def run_experiment_stale_aggregation(args, logger, thresholds):
+    args['rank'] = 0
+    args['device'] = torch.device("cuda")
+    # args['device'] = 'cpu'
+    if args['dataset'] == 'Epinion':
+        loader = EpinionDatasetLoader(timesteps = args['timesteps'])
+    elif args['dataset'] == 'Amazon':
+        loader = AmazonDatasetLoader(timesteps = args['timesteps'])
+    elif args['dataset'] == 'Movie':
+        loader = MovieDatasetLoader(timesteps = args['timesteps'])
+    elif args['dataset'] == 'Stack':
+        loader = StackDatasetLoader(timesteps = args['timesteps'])
+    else:
+        raise ValueError("No such dataset...")
+    dataset = loader.get_dataset()
+    snapshots = [snapshot for snapshot in dataset]
 
-        # pbar.set_description('epoch: {} loss: {}'.format(epoch, loss.item()))
+    for graph in snapshots:
+        graph = graph.to(args['device'])
+    for threshold in thresholds:
+        args['threshold'] = threshold
+        if args['threshold'] == 0:
+            args['stale'] = False
+        else:
+            args['stale'] = True
+        print(args)
 
-    _save_log(args, loss_log, acc_log)
+        _, partition, adjs = _get_partitions(snapshots)
 
-    # print('str emb: {} \n  \n tem_emb: {}'.format(print_str_emb, print_tem_emb))
-    # log config
-    current_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
-    log_file = current_path + '/log/testbed_emb_{}_{}.log'.format(args['dataset'], args['timesteps'])
-    logging.basicConfig(filename=log_file,
-                        filemode='a',
-                        format='%(message)s',
-                        level=logging.INFO)
-    # logging.basicConfig(level=logging.INFO, format='%(message)s')
-    logger = logging.getLogger('example')
-    logger.info('previous str embedding {}'.format(pre_str_emb))
-    logger.info('previous tem embedding {}'.format(pre_tem_emb))
-    logger.info('current str embedding {}'.format(cur_str_emb))
-    logger.info('current tem embedding {}'.format(cur_tem_emb))
-    handlers = logger.handlers[:]
-    for handler in handlers:
-        logger.removeHandler(handler)
-        handler.close()
-    # print(print_weight)
+        best_acc_list = []
+        total_str_reduced_comm = []
+        total_tem_reduced_comm = []
+        for i in range(5):
+            args['threshold'] = threshold
+            model = My_Model(args, node_features = 2).to(args['device'])
+            loss_func = torch.nn.CrossEntropyLoss()
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.001)
+            acc_log = []
+            loss_log = []
+            best_acc = 0
+            reduced_str_comm = []
+            reduced_tem_comm = []
+            for epoch in range(args['epochs']):
+                # if epoch != 0 and epoch%50 == 0:
+                #     args['threshold'] += 0.5
+                #     print('current threshold ', args['threshold'])
+                model.train()
+                loss = 0
+                samples = [snapshot.train_samples for snapshot in snapshots]
+                structural_outputs, temporal_outputs, outputs = model(snapshots, samples, epoch)
+                # communication simulation
+                if epoch == 0:
+                    simulator = Simulator(structural_outputs, temporal_outputs, partition, adjs)
+                else:
+                    original_comm_str, original_comm_tem = simulator.count_comm(structural_outputs, temporal_outputs)
+                    stale_comm_str, stale_comm_tem, reduced_str, reduced_tem = simulator.count_comm_stale(structural_outputs, temporal_outputs, epoch, args['threshold'])
+                    print('reduced spatial communication {}  and temporal communication {}'.format(np.mean(reduced_str), np.mean(reduced_tem)))
+                    # reduced_str_comm.append((original_comm_str-stale_comm_str)/original_comm_str)
+                    # reduced_tem_comm.append((original_comm_tem-stale_comm_tem)/original_comm_tem)
+
+                gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
+
+                for time, snapshot in enumerate(snapshots):
+                    y = outputs[time]
+                    label = snapshot.train_labels
+                    # print('emb size: {}, target_id size: {}'.format(y.size(), label.size()))
+                    error = loss_func(y.squeeze(dim=-1), label)
+                    loss += error
+                loss = loss/len(snapshots)
+                loss_log.append(loss.item())
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+                # print('epoch: {} loss: {}'.format(epoch, loss.item()))
+
+                with torch.no_grad():
+                    model.eval()
+                    ACC = 0
+                    samples = [snapshot.test_samples for snapshot in snapshots]
+                    _, _, outputs = model(snapshots, samples)
+                    for time, snapshot in enumerate(snapshots):
+                        y = outputs[time]
+                        label = snapshot.test_labels.cpu().numpy()
+                        prob_f1 = []
+                        prob_auc = []   
+                        prob_f1.extend(np.argmax(y.detach().cpu().numpy(), axis = 1))
+                        ACC += sum(prob_f1 == label)/len(label)
+                    acc = ACC/len(snapshots)
+                    acc_log.append(acc)
+                    if best_acc <= acc:
+                        best_acc = acc
+                print('epoch: {} loss: {:.4f} acc: {:.4f} GPU memory {:.3f}'.format(epoch, loss.item(), acc, gpu_mem_alloc))
+            total_str_reduced_comm.append(np.mean(reduced_str))
+            total_tem_reduced_comm.append(np.mean(reduced_tem))
+            best_acc_list.append(best_acc)
+        print('best accuracy: {:.3f} error: {:.3f} str comm: {:.3f} tem comm: {:.3f}'.format(np.mean(best_acc_list[3:]), np.std(best_acc_list[3:]), np.mean(total_str_reduced_comm), np.mean(total_tem_reduced_comm)))
+        logger.info('{} | T: {} | threshold: {} | accuracy: {:.3f} | error: {:.3f} | str reduced: {:.3f} | tem reduced: {:.3f}'.format(args['dataset'], args['timesteps'], args['threshold'], np.mean(best_acc_list[3:]), np.std(best_acc_list[3:]), np.mean(total_str_reduced_comm), np.mean(total_tem_reduced_comm)))
+
+def run_experiment_fusion(args):
+    print(args)
+
+    args['rank'] = 0
+    args['device'] = torch.device("cuda")
+    args['stale'] = False
+
+    # args['device'] = 'cpu'
+    if args['dataset'] == 'Epinion':
+        loader = EpinionDatasetLoader(timesteps = args['timesteps'])
+    elif args['dataset'] == 'Amazon':
+        loader = AmazonDatasetLoader(timesteps = args['timesteps'])
+    elif args['dataset'] == 'Movie':
+        loader = MovieDatasetLoader(timesteps = args['timesteps'])
+    elif args['dataset'] == 'Stack':
+        loader = StackDatasetLoader(timesteps = args['timesteps'])
+    else:
+        raise ValueError("No such dataset...")
+    dataset = loader.get_dataset()
+    snapshots = [snapshot for snapshot in dataset]
+
+    for graph in snapshots:
+        graph = graph.to(args['device'])
+
+    model = My_Model(args, node_features = 2).to(args['device'])
+    loss_func = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.001)
+    acc_log = []
+    loss_log = []
+    best_acc = 0
+
+    import wandb
+    run = wandb.init(project="DGNN_GPU_utilization", entity="fahao", name=args['dataset'], reinit=True)
+    for epoch in range(args['epochs']):
+        model.train()
+        loss = 0
+        samples = [snapshot.train_samples for snapshot in snapshots]
+        _, _, outputs = model(snapshots, samples, epoch)
+        gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
+        for time, snapshot in enumerate(snapshots):
+            y = outputs[time]
+            label = snapshot.train_labels
+            # print('emb size: {}, target_id size: {}'.format(y.size(), label.size()))
+            error = loss_func(y.squeeze(dim=-1), label)
+            loss += error
+        loss = loss/len(snapshots)
+        loss_log.append(loss.item())
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+        # print('epoch: {} loss: {}'.format(epoch, loss.item()))
+
+        with torch.no_grad():
+            model.eval()
+            ACC = 0
+            samples = [snapshot.test_samples for snapshot in snapshots]
+            _, _, outputs = model(snapshots, samples)
+            for time, snapshot in enumerate(snapshots):
+                y = outputs[time]
+                label = snapshot.test_labels.cpu().numpy()
+                prob_f1 = []
+                prob_auc = []   
+                prob_f1.extend(np.argmax(y.detach().cpu().numpy(), axis = 1))
+                ACC += sum(prob_f1 == label)/len(label)
+            acc = ACC/len(snapshots)
+            acc_log.append(acc)
+            if best_acc <= acc:
+                best_acc = acc
+        print('epoch: {} loss: {:.4f} acc: {:.4f} GPU memory {:.3f}'.format(epoch, loss.item(), acc, gpu_mem_alloc))
+    print('best accuracy: {:.3f} '.format(best_acc))
+    run.finish()
 
 if __name__ == '__main__':
     args = _get_args()
-    run_example(args)
-    # for dataset in ['Amazon', 'Epinion', 'Movie', 'Stack']:
-    #     args['dataset'] = dataset
-    #     run_example(args)
+    if args['experiments'] == 'stale_acc':
+        experiment_thresholds = [0, 0.1, 0.3, 0.5, 0.9]
+        experiments_datasets = ['Amazon', 'Epinion', 'Movie', 'Stack']
+        for dataset in experiments_datasets:
+            args['dataset'] = dataset
+            # log config
+            current_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
+            log_file = current_path + '/log/example_experiment_stale_aggregation.log'
+            logging.basicConfig(filename=log_file,
+                                filemode='a',
+                                format='%(message)s',
+                                level=logging.INFO)
+            # logging.basicConfig(level=logging.INFO, format='%(message)s')
+            logger = logging.getLogger('example')
+            run_experiment_stale_aggregation(args, logger, experiment_thresholds)
     
-    # for dataset in ['Amazon', 'Epinion', 'Movie', 'Stack']:
-    #     args['dataset'] = dataset
-    #     args['timesteps'] = 9
-    #     run_example(args)
+    elif args['experiments'] == 'stale_comm':
+        # run_example(args)
+        reduced_communication_str = []
+        reduced_communication_tem = []
+        experiments_datasets = ['Amazon', 'Epinion', 'Movie', 'Stack']
+        for dataset in experiments_datasets:
+            args['dataset'] = dataset
+            run_example(args)
+            str_reduce, tem_reduce = run_example(args)
+            reduced_communication_str.append(str_reduce)
+            reduced_communication_tem.append(tem_reduce)
+        print('average reduced spatial communication: {} | reduced temporal communication: {}'.format(reduced_communication_str, reduced_communication_tem))
+
+    elif args['experiments'] == 'fusion_gpu':
+        experiments_datasets = ['Amazon', 'Epinion', 'Movie', 'Stack']
+        for dataset in experiments_datasets:
+            args['dataset'] = dataset
+            run_experiment_fusion(args)
+    
+    else:
+        raise Exception('There is no such an experiment type!')
+
+
+
 
     
 

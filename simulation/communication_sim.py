@@ -100,10 +100,7 @@ class Simulator():
             tem_count += count.size(0)*emb_tem.size(2)
         return str_count, tem_count
 
-    def count_comm_stale(self, emb_str, emb_tem, epoch):
-        scale_theta = 0.2 + (epoch%20)*0.1  # distance threshold
-        if scale_theta > 1:
-            scale_theta = 1
+    def count_comm_stale(self, emb_str, emb_tem, epoch, theta):
 
         '''
         paras:
@@ -126,6 +123,9 @@ class Simulator():
         whether_send_tem = torch.zeros(self.N, self.T, dtype=torch.bool)
         distance_str = _tensor_distance(self.emb_str_checkpoint, emb_str)
         distance_tem = _tensor_distance(self.emb_tem_checkpoint, emb_tem)
+
+        reduced_str = []
+        reduced_tem = []
         for time in range(self.T):
             str_not_send_num = torch.nonzero(str_need_not_comm[:, time] == True, as_tuple=False).view(-1)
             tem_not_send_num = torch.nonzero(tem_need_not_comm[:, time] == True, as_tuple=False).view(-1)
@@ -133,28 +133,54 @@ class Simulator():
             tem_not_send_mask = tem_need_not_comm[:, time].to(device)
             str_send_mask = ~str_need_not_comm[:, time].to(device)
             tem_send_mask = ~tem_need_not_comm[:, time].to(device)
-            
-            distance_str[str_not_send_mask, time] = torch.zeros(str_not_send_num.size(0), dtype=torch.float32).to(device)
-            distance_tem[tem_not_send_mask, time] = torch.zeros(tem_not_send_num.size(0), dtype=torch.float32).to(device)
-            # calculate the average distance
-            str_avg_distance = torch.mean(distance_str[str_send_mask, time])
-            tem_avg_distance = torch.mean(distance_tem[tem_send_mask, time])
-            str_threshold = str_avg_distance*scale_theta
-            tem_threshold = tem_avg_distance*scale_theta
 
-            greater_distance_str = torch.nonzero(distance_str[:, time] > str_threshold, as_tuple=False).view(-1)
-            greater_distance_tem = torch.nonzero(distance_tem[:, time] > tem_threshold, as_tuple=False).view(-1)
+            # print('original spatial distances ', distance_str[:, time].tolist())
+            # print('original temporal distances ', distance_tem[:, time].tolist())
+            # process the spatial and temporal embeddings
+            str_values, str_indices = distance_str[:, time].topk(2, largest=True, sorted=True)
+            tem_values, tem_indices = distance_tem[:, time].topk(2, largest=True, sorted=True)
+            distance_str[str_indices, time] = torch.zeros(str_indices.size(0), dtype=torch.float32).to(device)
+            distance_tem[tem_indices, time] = torch.zeros(tem_indices.size(0), dtype=torch.float32).to(device)
+
+            # # calculate the average distance, method 1: average distance
+            # distance_str[str_not_send_mask, time] = torch.zeros(str_not_send_num.size(0), dtype=torch.float32).to(device)
+            # distance_tem[tem_not_send_mask, time] = torch.zeros(tem_not_send_num.size(0), dtype=torch.float32).to(device)
+            # str_avg_distance = torch.mean(distance_str[str_send_mask, time])
+            # tem_avg_distance = torch.mean(distance_tem[tem_send_mask, time])
+            # str_threshold = str_avg_distance*theta
+            # tem_threshold = tem_avg_distance*theta
+            # greater_distance_str = torch.nonzero(distance_str[str_send_mask, time] >= str_threshold, as_tuple=False).view(-1)
+            # greater_distance_tem = torch.nonzero(distance_tem[tem_send_mask, time] >= tem_threshold, as_tuple=False).view(-1)
+            # smaller_distance_str = torch.nonzero(distance_str[str_send_mask, time] < str_threshold, as_tuple=False).view(-1)
+            # smaller_distance_tem = torch.nonzero(distance_tem[tem_send_mask, time] < tem_threshold, as_tuple=False).view(-1)
+
+            # method 2: normalized distance
+            str_max_distance = torch.max(distance_str[:, time])
+            tem_max_distance = torch.max(distance_tem[:, time])
+            str_normalized_distance = distance_str[:, time]/str_max_distance
+            tem_normalized_distance = distance_str[:, time]/tem_max_distance
+            # str_normalized_distance[str_not_send_mask] = torch.zeros(str_not_send_num.size(0), dtype=torch.float32).to(device)
+            # tem_normalized_distance[tem_not_send_mask] = torch.zeros(tem_not_send_num.size(0), dtype=torch.float32).to(device)
+            greater_distance_str = torch.nonzero(str_normalized_distance[:] >= theta/100, as_tuple=False).view(-1)
+            smaller_distance_str = torch.nonzero(str_normalized_distance[:] < theta/100, as_tuple=False).view(-1)
+            greater_distance_tem = torch.nonzero(tem_normalized_distance[:] >= theta/100, as_tuple=False).view(-1)
+            smaller_distance_tem = torch.nonzero(tem_normalized_distance[:] < theta/100, as_tuple=False).view(-1)
+    
+            print('need to send str embeddings {}, reduced communication {}'.format(str_normalized_distance.size(0), smaller_distance_tem.size(0)))
+            reduced_str.append(smaller_distance_str.size(0)/str_send_mask.size(0))
+            reduced_tem.append(smaller_distance_tem.size(0)/tem_send_mask.size(0))
             whether_send_str[greater_distance_str, time] = torch.ones(greater_distance_str.size(0), dtype=torch.bool)
             whether_send_tem[greater_distance_tem, time] = torch.ones(greater_distance_tem.size(0), dtype=torch.bool)
             comm_str_vollume += greater_distance_str.size(0)
             comm_tem_vollume += greater_distance_tem.size(0)
+
         
         # update latest sent embeddings
         for time in range(self.T):
             self.emb_str_checkpoint[whether_send_str[:, time], time] = emb_str[whether_send_str[:, time], time]
             self.emb_tem_checkpoint[whether_send_tem[:, time], time] = emb_tem[whether_send_tem[:, time], time]
         
-        return comm_str_vollume*self.F, comm_tem_vollume*self.F
+        return comm_str_vollume*self.F, comm_tem_vollume*self.F, reduced_str, reduced_tem
 
     # def count_comm_volume(self, emb_str, emb_tem):
     #     comm_volume_str = 0

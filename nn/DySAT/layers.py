@@ -40,7 +40,7 @@ class GAT_Layer(nn.Module):
             self.lin_residual = nn.Linear(input_dim, n_heads * self.out_dim, bias=False)
     
     def forward(self, graph):
-        graph = copy.deepcopy(graph)
+        # graph = copy.deepcopy(graph)
         edge_index = graph.edge_index
         # edge_weight = graph.edge_weight.reshape(-1, 1)
         H, C = self.n_heads, self.out_dim

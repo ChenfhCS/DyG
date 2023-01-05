@@ -16,6 +16,13 @@ from .layers import ATT_layer as TemporalAttentionLayer
 
 # from utils import *
 
+def _tensor_distance(tensor_A, tensor_B):
+    sub_c = torch.sub(tensor_A, tensor_B)
+    sq_sub_c = sub_c**2
+    sum_sq_sub_c = torch.sum(sq_sub_c, dim=2)
+    distance = torch.sqrt(sum_sq_sub_c)
+    return distance
+
 class DySAT(nn.Module):
     def __init__(self, args, num_features, workload_GCN = None, workload_RNN = None):
         '''
@@ -39,6 +46,10 @@ class DySAT(nn.Module):
 
         self.rank = args['rank']
         self.device = args['device']
+        self.threshold = 0
+
+        self.str_checkpoint_ini = False
+        self.tem_checkpoint_ini = False
         
         # self.workload_GCN = workload_GCN
         # self.workload_RNN = workload_RNN
@@ -74,9 +85,8 @@ class DySAT(nn.Module):
     def forward(self, graphs, gate = None, distribute = None):
         structural_out = []
         for t in range(0, self.num_time_steps):
-            graphs[t] = graphs[t].to(self.device)
+            # graphs[t] = graphs[t].to(self.device)
             structural_out.append(self.structural_attn(graphs[t]))
-            # graphs[t] = graphs[t].to('cpu')
         structural_outputs = [g[:,None,:] for g in structural_out] # list of [Ni, 1, F]
 
         # padding outputs along with Ni
@@ -88,28 +98,50 @@ class DySAT(nn.Module):
             padded = torch.cat((out, zero_padding), dim=0)
             structural_outputs_padded.append(padded)
         structural_outputs_padded = torch.cat(structural_outputs_padded, dim=1) # [N, T, F]
-        # print([out.size() for out in structural_outputs])
-        # print('structure input size: ', structural_outputs_padded.size())
-        # if len(self.structural_out_pre) < 1:
-        #     for t in range(structural_outputs_padded.size(1)):
-        #         temp = structural_outputs_padded[self.args['workload_gcn'][t], t, :].clone()
-        #         self.structural_out_pre.append(temp)
         
-        # for t in range(structural_outputs_padded.size(1)):
-        #     temp = structural_outputs_padded[self.args['workload_gcn'][t], t, :].clone()
-        #     structural_outputs_padded[self.args['workload_gcn'][t], t, :] = self.structural_out_pre[t]
-        #     self.structural_out_pre[t] = temp.clone()
-        #         # temp = structural_outputs_padded[self.args['workload_gcn'][t], :, :]
-        #         # self.structural_out_pre.append(temp)
-        
-        # Temporal Attention forward
+        # spatial embedding reuse
+        if self.args['stale'] == True:
+            self.threshold = self.args['threshold']
+            if self.str_checkpoint_ini == False:
+                print('initialize spatial embedding checkpoints!')
+                self.emb_str_checkpoint = structural_outputs_padded.detach().clone()
+                self.str_checkpoint_ini = True
+            else:
+                distance_str = _tensor_distance(self.emb_str_checkpoint, structural_outputs_padded)  #[N, T]
+                for t in range(structural_outputs_padded.size(1)):
+                    str_avg_distance = torch.mean(distance_str[:, t])
+                    str_max_distance = torch.max(distance_str[:, t])
+                    str_normalized_distance = distance_str[:, t]/str_max_distance
+                    str_threshold = str_avg_distance*self.threshold
+                    smaller_distance_str = torch.nonzero(str_normalized_distance <= self.args['threshold'], as_tuple=False).view(-1)
+                    greater_distance_str = torch.nonzero(str_normalized_distance > self.args['threshold'], as_tuple=False).view(-1)
+                    # smaller_distance_str = torch.nonzero(distance_str[:, t] <= str_threshold, as_tuple=False).view(-1)
+                    # greater_distance_str = torch.nonzero(distance_str[:, t] > str_threshold, as_tuple=False).view(-1)
+                    structural_outputs_padded[smaller_distance_str, t, :] = self.emb_str_checkpoint[smaller_distance_str, t, :].detach().clone()
+                    self.emb_str_checkpoint[greater_distance_str, t, :] = structural_outputs_padded[greater_distance_str, t, :].detach().clone()
+
         temporal_out = self.temporal_attn(structural_outputs_padded)
         
-        # print('node embeddings: ', temporal_out[10, -1, :])
-        # print('adj: ', graphs[2].edge_index)
-        # print('structure embedding: ', structural_outputs[0][:10, :, 0:10])
-        # print('padded structure embedding: ', structural_outputs_padded[10, -1, :])
-        # print('temporal embedding: ', temporal_out[:10, 0, 0:10])
+        # temporal embedding reuse
+        if self.args['stale'] == True:
+            if self.tem_checkpoint_ini == False:
+                print('initialize temporal embedding checkpoints!')
+                self.emb_tem_checkpoint = temporal_out.detach().clone()
+                self.tem_checkpoint_ini = True
+            else:
+                distance_tem = _tensor_distance(self.emb_tem_checkpoint, temporal_out)  #[N, T]
+                for t in range(temporal_out.size(1)):
+                    tem_avg_distance = torch.mean(distance_tem[:, t])
+                    tem_max_distance = torch.max(distance_tem[:, t])
+                    tem_normalized_distance = distance_tem[:, t]/tem_max_distance
+                    tem_threshold = tem_avg_distance*self.threshold
+                    smaller_distance_tem = torch.nonzero(tem_normalized_distance <= self.args['threshold'], as_tuple=False).view(-1)
+                    greater_distance_tem = torch.nonzero(tem_normalized_distance > self.args['threshold'], as_tuple=False).view(-1)
+                    # smaller_distance_tem = torch.nonzero(distance_tem[:, t] <= tem_threshold, as_tuple=False).view(-1)
+                    # greater_distance_tem = torch.nonzero(distance_tem[:, t] > tem_threshold, as_tuple=False).view(-1)
+                    temporal_out[smaller_distance_tem, t, :] = self.emb_tem_checkpoint[smaller_distance_tem, t, :].detach().clone()
+                    self.emb_tem_checkpoint[greater_distance_tem, t, :] = temporal_out[greater_distance_tem, t, :].detach().clone()
+
         return structural_outputs_padded, temporal_out
 
     # construct model

@@ -486,7 +486,7 @@ class Diana():
                     num_node = compute_nodes.size(0)
                     inter_edges = GCN_communication + ATT_communication
                     score = inter_edges*(1-num_node/self.total_nodes)
-                    score = inter_edges+(1-num_node/self.total_nodes)
+                    # score = inter_edges+(1-num_node/self.total_nodes)
                     # score = inter_edges
                 elif alg == 'LDG_DyG':
                     gcn_cost = 0
@@ -687,24 +687,25 @@ def experiments(datasets, world_sizes):
             RNN_node_size = 128*32
 
             PTS_obj = PTS(args, graphs, nodes_list, adjs_list, args['world_size'], logger)
-            out1, cost1 = PTS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_GB, GCN_comp_scale, ATT_comp_scale)
+            out1, cost1 = PTS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_100MB, GCN_comp_scale, ATT_comp_scale)
             PTS_out.append(out1)
             PTS_cost.append(cost1)
 
             PSS_obj = PSS(args, graphs, nodes_list, adjs_list, args['world_size'], logger)
-            out2, cost2 = PSS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_GB, GCN_comp_scale, ATT_comp_scale)
+            out2, cost2 = PSS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_100MB, GCN_comp_scale, ATT_comp_scale)
             PSS_out.append(out2)
             PSS_cost.append(cost2)
 
             PSS_TS_obj = PSS_TS(args, graphs, nodes_list, adjs_list, args['world_size'], logger)
-            out3, cost3 = PSS_TS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_GB, GCN_comp_scale, ATT_comp_scale)
+            out3, cost3 = PSS_TS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_100MB, GCN_comp_scale, ATT_comp_scale)
             PSS_TS_out.append(out3)
             PSS_TS_cost.append(cost3)
             # print(PSS_obj.workloads_ATT[0][1], PSS_TS_obj.workloads_ATT[0][1])
 
-            Diana_obj = Diana(args, graphs, nodes_list, adjs_list, args['world_size'], GCN_node_size, RNN_node_size, bandwidth_GB, logger)
+            Diana_obj = Diana(args, graphs, nodes_list, adjs_list, args['world_size'], GCN_node_size, RNN_node_size, bandwidth_100MB, logger)
             Diana_obj.partitioning('LDG_base')
-            out4, cost4 = Diana_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_GB, GCN_comp_scale, ATT_comp_scale)
+            # Diana_obj.workload_distribution()
+            out4, cost4 = Diana_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_100MB, GCN_comp_scale, ATT_comp_scale)
             PGC_out.append(out4)
             PGC_cost.append(cost4)
             print('----------------Dataset: {} world_size: {}----------------'.format(dataset, world_size))
@@ -771,7 +772,7 @@ def experiment_fragmentation(node_list, spatial_workloads, temporal_workloads):
         temporal_distribution[m].extend(sequence_lengths_positive)
     
     for m in range(num_device):
-        print('GPU {} has: spatial workloads {} | temporal workloads {}'.format(m, spatial_distribution[m], len(temporal_distribution[m])))
+        print('GPU {} has: spatial workloads {} | temporal workloads {}'.format(m, spatial_distribution[m], temporal_distribution[m]))
         print('\n')
 
 if __name__ == '__main__':
@@ -788,105 +789,10 @@ if __name__ == '__main__':
     parser.add_argument('--real', type=str, nargs='?', default='True',
                     help='Whether use the real graph')
     args = vars(parser.parse_args())
-
-    # print(args['real'])
-    # if args['real'] == 'False':
-    #     # validation
-    #     nodes_list, adjs_list = generate_test_graph()
-    #     graphs = [nx.complete_graph(nodes_list[i].size(0)) for i in range(len(nodes_list))]
-    #     time_steps = len(graphs)
-    #     GCN_node_size = 25600
-    #     RNN_node_size = 12800
-    #     Degrees = [list(dict(nx.degree(graphs[t])).values()) for t in range(time_steps)]
-    #     print('Number of graphs: ', len(graphs))
-    #     print('Number of features: ', GCN_node_size)
-    #     print('Average degrees: ', [np.mean(Degrees[t]) for t in range(time_steps)])
-
-    # else:
-    #     raw_graphs = load_data(args)
-    #     graphs = raw_graphs
-    #     _, raw_adj, raw_feats, num_feats = generate_graphs(args, graphs)
-    #     total_graphs = len(graphs)
-    #     # print('Generate graphs!')
-    #     start = len(graphs) - args['timesteps']
-    #     # print(len(graph), args['time_steps'], start)
-
-    #     graphs = graphs[start:]
-
-    #     Num_nodes = args['nodes_info']
-    #     Num_edges = args['edges_info']
-    #     time_steps = len(graphs)
-
-    #     nodes_list = [torch.tensor([j for j in range(Num_nodes[i])]) for i in range(time_steps)]
-    #     # nodes_list = [torch.tensor([j for j in range(Num_nodes[i])]) for i in time_idx]
-    #     # print('Generate nodes list!')
-
-    #     adjs_list = []
-    #     for i in range(time_steps):
-    #         # print(type(adj_matrices[i]))
-    #         adj_coo = raw_adj[i].tocoo()
-    #         values = adj_coo.data
-    #         indices = np.vstack((adj_coo.row, adj_coo.col))
-
-    #         i = torch.LongTensor(indices)
-    #         v = torch.FloatTensor(values)
-    #         shape = adj_coo.shape
-
-    #         adj_tensor_sp = torch.sparse_coo_tensor(i, v, torch.Size(shape))
-    #         adjs_list.append(adj_tensor_sp)
-    #     Degrees = [list(dict(nx.degree(graphs[t])).values()) for t in range(time_steps)]
-    #     # Degrees = [list(dict(nx.degree(graphs[t])).values()) for t in time_idx]
-    #     print('Number of total graphs ', total_graphs)
-    #     print('Number of used graphs: ', len(graphs))
-    #     print('Number of nodes: ', nodes_list[-1].size(0))
-    #     print('Number of features: ', raw_feats[0].size(1))
-    #     print('Node distribution: ', Num_nodes)
-    #     print('Edge distribution: ', Num_edges)
-    #     print('Average degrees: ', [np.mean(Degrees[t]) for t in range(time_steps)])
-
-    #     # GCN_node_size = raw_feats[0].size(1)*32*
-    #     GCN_node_size = 128*32
-    #     RNN_node_size = 128*32
     
     GCN_comp_scale = 4*math.pow(10, -5)
     ATT_comp_scale = 4*math.pow(10, -5)
 
-    # start = 0
-    # window = 5
-    # nodes_list = nodes_list[start: start+window]
-    # adjs_list = adjs_list[start: start+window]
+    # experiments(datasets=['Movie'], world_sizes=[4])
 
-
-    # # log config
-    # current_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
-    # log_file = current_path + '/log/example.log'
-    # logging.basicConfig(filename=log_file,
-    #                     filemode='a',
-    #                     format='%(message)s',
-    #                     level=logging.INFO)
-    # # logging.basicConfig(level=logging.INFO, format='%(message)s')
-    # logger = logging.getLogger('example')
-    # logger.info('----------------Dataset: {} Timesteps: {} world_size: {}----------------'.format(args['dataset'], args['timesteps'], args['world_size']))
-
-    # # # # balance methods
-
-    # PTS_obj = PTS(args, graphs, nodes_list, adjs_list, args['world_size'], logger)
-    # PTS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_100MB, GCN_comp_scale, ATT_comp_scale)
-    # # PTS_obj.workload_distribution()
-
-    # PSS_obj = PSS(args, graphs, nodes_list, adjs_list, args['world_size'], logger)
-    # PSS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_100MB, GCN_comp_scale, ATT_comp_scale)
-    # # PSS_obj.workload_distribution()
-
-    # PSS_TS_obj = PSS_TS(args, graphs, nodes_list, adjs_list, args['world_size'], logger)
-    # PSS_TS_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_100MB, GCN_comp_scale, ATT_comp_scale)
-    # # print(PSS_obj.workloads_ATT[0][1], PSS_TS_obj.workloads_ATT[0][1])
-
-    # Diana_obj = Diana(args, graphs, nodes_list, adjs_list, args['world_size'], GCN_node_size, RNN_node_size, bandwidth_10MB, GCN_comp_scale, ATT_comp_scale, logger)
-    # Diana_obj.partitioning('LDG_base')
-    # Diana_obj.communication_time(GCN_node_size, RNN_node_size, bandwidth_10MB, GCN_comp_scale, ATT_comp_scale)
-    # Diana_obj.workload_distribution()
-
-    # logger.info('\n')
-
-    experiments(datasets=['Amazon', 'Epinion', 'Movie', 'Stack'], world_sizes=[2, 3, 4, 8, 16, 24, 32])
+    experiments(datasets=['Amazon', 'Epinion', 'Movie', 'Stack'], world_sizes=[4, 8, 16])
