@@ -353,6 +353,10 @@ def run_experiment_fusion(args):
 
 if __name__ == '__main__':
     args = _get_args()
+    folder_in = os.path.exists('./log/')
+    if not folder_in:
+        os.makedirs('./log/')
+
     if args['experiments'] == 'stale_acc':
         experiment_thresholds = [0, 0.1, 0.3, 0.5, 0.9]
         experiments_datasets = ['Amazon', 'Epinion', 'Movie', 'Stack']

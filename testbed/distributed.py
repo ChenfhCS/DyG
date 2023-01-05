@@ -20,7 +20,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from dataset import AmazonDatasetLoader, EpinionDatasetLoader, MovieDatasetLoader, StackDatasetLoader
 from nn import DySAT
 from nn import classifier
-from MLDP import Partition_DyG, node_partition_balance
+from partitioner import PSS, PTS, PSS_TS, Diana
 
 Comm_backend = 'gloo'
 
@@ -64,7 +64,7 @@ def _get_args():
     args = vars(parser.parse_args())
     return args
 
-def _get_partitions(snapshots):
+def _get_partitions(args, snapshots):
     graphs = [snapshot.raw_graph for snapshot in snapshots]
     nodes_list = [torch.tensor([j for j in range(graphs[i].number_of_nodes())]) for i in range(len(snapshots))]
     adjs_list = []
@@ -75,7 +75,7 @@ def _get_partitions(snapshots):
         adjs_list.append(adj)
     # partitioner = Partition_DyG(args, graphs, nodes_list, adjs_list, 2, 128, 128, float(1024*1024*8))
     # total_workload_gcn, total_workload_rnn = partitioner.get_partition()
-    partitioner = node_partition_balance(args, graphs, nodes_list, adjs_list, 2)
+    partitioner = PSS(args, graphs, nodes_list, adjs_list, 2)
     total_workload_gcn, total_workload_rnn = partitioner.get_partition()
     # Diana_obj = Diana(args, graphs, nodes_list, adjs_list, args['world_size'], 128*32, 128*32, float(1024*1024*8), logger=None)
     # Diana_obj.partitioning('LDG_base')
@@ -101,7 +101,7 @@ def _run_training(args):
     model = My_Model(args, node_features = 2).to(args['device'])
     model = DDP(model, process_group=args['dp_group'], device_ids=[args['rank']], find_unused_parameters=True)
 
-    # _, partition, adjs = _get_partitions(snapshots)
+    _, partition, adjs = _get_partitions(args, snapshots)
 
     loss_func = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.001)
@@ -206,6 +206,10 @@ def _set_env(rank):
 if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')
     args = _get_args()
+    folder_in = os.path.exists('./log/')
+    if not folder_in:
+        os.makedirs('./log/')
+
     world_size = args['world_size']
     assert torch.cuda.device_count() >= world_size, 'No enough GPU!'
     workers = []
