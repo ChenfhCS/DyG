@@ -2,9 +2,9 @@ import torch
 import argparse
 import numpy as np
 import networkx as nx
-import pandas as pd
 import logging
 import multiprocessing as mp
+import copy
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -22,7 +22,7 @@ from nn import DySAT
 from nn import classifier
 from partitioner import PSS, PTS, PSS_TS, Diana
 
-Comm_backend = 'gloo'
+Comm_backend = 'nccl'
 
 class My_Model(torch.nn.Module):
     def __init__(self, args, node_features):
@@ -55,7 +55,7 @@ def _get_args():
                         help='method for DGNN training')
     parser.add_argument('--timesteps', type=int, nargs='?', default=15,
                     help="total time steps used for train, eval and test")
-    parser.add_argument('--epochs', type=int, nargs='?', default=500,
+    parser.add_argument('--epochs', type=int, nargs='?', default=10,
                     help="total number of epochs")
     parser.add_argument('--world_size', type=int, default=2,
                         help='method for DGNN training')
@@ -84,24 +84,30 @@ def _get_partitions(args, snapshots):
 
 def _run_training(args):
     # print hyper-parameters
-    print('{} {}'.format(args['rank'], args))
+    rank = args['rank']
+    print('{} {}'.format(rank, args))
 
-    if args['dataset'] == 'Epinion':
-        loader = EpinionDatasetLoader(timesteps = args['timesteps'])
-    elif args['dataset'] == 'Amazon':
-        loader = AmazonDatasetLoader(timesteps = args['timesteps'])
-    elif args['dataset'] == 'Movie':
-        loader = MovieDatasetLoader(timesteps = args['timesteps'])
-    elif args['dataset'] == 'Stack':
-        loader = StackDatasetLoader(timesteps = args['timesteps'])
-    else:
-        raise ValueError("No such dataset...")
-    dataset = loader.get_dataset()
+    # if args['dataset'] == 'Epinion':
+    #     loader = EpinionDatasetLoader(timesteps = args['timesteps'])
+    # elif args['dataset'] == 'Amazon':
+    #     loader = AmazonDatasetLoader(timesteps = args['timesteps'])
+    # elif args['dataset'] == 'Movie':
+    #     loader = MovieDatasetLoader(timesteps = args['timesteps'])
+    # elif args['dataset'] == 'Stack':
+    #     loader = StackDatasetLoader(timesteps = args['timesteps'])
+    # else:
+    #     raise ValueError("No such dataset...")
+    # dataset = loader.get_dataset()
+    dataset = copy.deepcopy(args['load_dataset'])
     snapshots = [snapshot for snapshot in dataset]
     model = My_Model(args, node_features = 2).to(args['device'])
-    model = DDP(model, process_group=args['dp_group'], device_ids=[args['rank']], find_unused_parameters=True)
+    model = DDP(model, process_group=args['dp_group'], device_ids=[rank], find_unused_parameters=False)
 
-    _, partition, adjs = _get_partitions(args, snapshots)
+    # print('rank {} model shape:'.format(rank))
+    # for name,parameters in model.named_parameters():
+    #     print(rank, name,':',parameters.size())
+
+    # _, partition, adjs = _get_partitions(args, snapshots)
 
     loss_func = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.001)
@@ -121,9 +127,6 @@ def _run_training(args):
         loss = 0
         samples = [snapshot.train_samples for snapshot in snapshots]
         _, _, outputs = model(snapshots, samples)
-
-        gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
-
         for time, snapshot in enumerate(snapshots):
             y = outputs[time]
             label = snapshot.train_labels
@@ -134,39 +137,40 @@ def _run_training(args):
         loss_log.append(loss.item())
         loss.backward()
         optimizer.step()
+        gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
         optimizer.zero_grad()
-        # print('epoch: {} loss: {}'.format(epoch, loss.item()))
 
-        if args['rank'] == 0:
-            with torch.no_grad():
-                model.eval()
-                ACC = 0
-                samples = [snapshot.test_samples for snapshot in snapshots]
-                _, _, outputs = model(snapshots, samples)
-                for time, snapshot in enumerate(snapshots):
-                    y = outputs[time]
-                    label = snapshot.test_labels.cpu().numpy()
-                    prob_f1 = []
-                    prob_auc = []
-                    prob_f1.extend(np.argmax(y.detach().cpu().numpy(), axis = 1))
-                    ACC += sum(prob_f1 == label)/len(label)
-                acc = ACC/len(snapshots)
-                acc_log.append(acc)
-                if best_acc <= acc:
-                    best_acc = acc
-            print('epoch: {} loss: {:.4f} acc: {:.4f} GPU memory {:.3f}'.format(epoch, loss.item(), acc, gpu_mem_alloc))
-    if args['rank'] == 0:
+        with torch.no_grad():
+            model.eval()
+            ACC = 0
+            samples = [snapshot.test_samples for snapshot in snapshots]
+            _, _, outputs = model(snapshots, samples)
+            for time, snapshot in enumerate(snapshots):
+                y = outputs[time]
+                label = snapshot.test_labels.cpu().numpy()
+                prob_f1 = []
+                prob_auc = []
+                prob_f1.extend(np.argmax(y.detach().cpu().numpy(), axis = 1))
+                ACC += sum(prob_f1 == label)/len(label)
+            acc = ACC/len(snapshots)
+            acc_log.append(acc)
+            if best_acc <= acc:
+                best_acc = acc
+            if rank == 0:
+                print('epoch: {} loss: {:.4f} acc: {:.4f} GPU memory {:.3f}'.format(epoch, loss.item(), acc, gpu_mem_alloc))
+    if rank == 0:
         print('best accuracy: {:.3f}'.format(best_acc))
 
-def _set_env(rank):
+def _set_env(rank, args_server):
     args = _get_args()
     world_size = args['world_size']
     args['rank'] = rank
     args['distributed'] = True
+    args['load_dataset'] = args_server['load_dataset']
 
     # init the communication group
     dist_init_method = 'tcp://{master_ip}:{master_port}'.format(
-            master_ip='127.0.0.1', master_port='12346')
+            master_ip='127.0.0.1', master_port='12347')
     torch.distributed.init_process_group(backend = Comm_backend,
                                          init_method = dist_init_method,
                                          world_size = world_size,
@@ -210,11 +214,24 @@ if __name__ == '__main__':
     if not folder_in:
         os.makedirs('./log/')
 
+    if args['dataset'] == 'Epinion':
+        loader = EpinionDatasetLoader(timesteps = args['timesteps'])
+    elif args['dataset'] == 'Amazon':
+        loader = AmazonDatasetLoader(timesteps = args['timesteps'])
+    elif args['dataset'] == 'Movie':
+        loader = MovieDatasetLoader(timesteps = args['timesteps'])
+    elif args['dataset'] == 'Stack':
+        loader = StackDatasetLoader(timesteps = args['timesteps'])
+    else:
+        raise ValueError("No such dataset...")
+    dataset = loader.get_dataset()
+    args['load_dataset'] = dataset
+
     world_size = args['world_size']
     assert torch.cuda.device_count() >= world_size, 'No enough GPU!'
     workers = []
     for rank in range(world_size):
-        p = mp.Process(target=_set_env, args=(rank,))
+        p = mp.Process(target=_set_env, args=(rank, args,))
         p.start()
         workers.append(p)
     for p in workers:

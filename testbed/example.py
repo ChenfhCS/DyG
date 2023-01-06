@@ -53,7 +53,7 @@ def _get_args():
                         help='method for DGNN training')
     parser.add_argument('--timesteps', type=int, nargs='?', default=15,
                     help="total time steps used for train, eval and test")
-    parser.add_argument('--epochs', type=int, nargs='?', default=500,
+    parser.add_argument('--epochs', type=int, nargs='?', default=200,
                     help="total number of epochs")
     parser.add_argument('--experiments', type=str, nargs='?', required=True,
                     help="experiment type")
