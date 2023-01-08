@@ -1,0 +1,4 @@
+wget -P ../dataset/Amazon https://nrvis.com/download/data/dynamic/rec-amazon-ratings.zip && unzip -o ../dataset/Amazon/rec-amazon-ratings.zip -d ../dataset/Amazon
+wget -P ../dataset/Epinion https://nrvis.com/download/data/dynamic/rec-epinions-user-ratings.zip && unzip -o ../dataset/Epinion/rec-epinions-user-ratings.zip -d ../dataset/Epinion
+wget -P ../dataset/Movie https://nrvis.com/download/data/dynamic/rec-movielens-ratings.zip && unzip -o ../dataset/Movie/rec-movielens-ratings.zip -d ../dataset/Movie
+wget -P ../dataset/Stack https://nrvis.com/download/data/dynamic/sx-stackoverflow.zip && unzip -o ../dataset/Stack/sx-stackoverflow.zip -d ../dataset/Stack
