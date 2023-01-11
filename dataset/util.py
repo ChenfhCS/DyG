@@ -60,24 +60,33 @@ def _negative_sample(edges_pos, nodes_num, graph):
         edges_neg.append([idx_i, idx_j])
     return edges_neg
 
-def train_test_split(sample_pos, sample_neg, train_ratio: float = 0.6):
+def train_test_split(sample_pos, sample_neg, train_ratio: float = 0.6, val_ratio: float = 0.2):
     num_train_samples_pos = int(len(sample_pos) * train_ratio)
     num_train_samples_neg = int(len(sample_neg) * train_ratio)
 
+    num_val_samples_pos = int(len(sample_pos) * val_ratio)
+    num_val_samples_neg = int(len(sample_neg) * val_ratio)
+
     train_sample_pos = sample_pos[0:num_train_samples_pos]
-    test_sample_pos = sample_pos[num_train_samples_pos:]
+    val_sample_pos = sample_pos[num_train_samples_pos:num_train_samples_pos+num_val_samples_pos]
+    test_sample_pos = sample_pos[num_train_samples_pos+num_val_samples_pos:]
 
     train_sample_neg = sample_neg[0:num_train_samples_neg]
-    test_sample_neg = sample_neg[num_train_samples_neg:]
+    val_sample_neg = sample_neg[num_train_samples_neg:num_train_samples_neg+num_val_samples_neg]
+    test_sample_neg = sample_neg[num_train_samples_neg+num_val_samples_neg:]
 
     train_pos_labels = np.array([[1,0] for i in range(len(train_sample_pos))])
     train_neg_labels = np.array([[0,1] for i in range(len(train_sample_neg))])
+    val_pos_labels = np.array([0] * len(val_sample_pos))
+    val_neg_labels = np.array([1] * len(val_sample_neg))
     test_pos_labels = np.array([0] * len(test_sample_pos))
     test_neg_labels = np.array([1] * len(test_sample_neg))
 
     train_samples = torch.tensor(np.vstack((train_sample_pos, train_sample_neg)))  # train_pos_feats and train_neg_feats are 2-dim numpy matrix, stack them to a new numpy matrix via vstack()
     train_labels = torch.tensor(np.vstack((train_pos_labels, train_neg_labels)), dtype=torch.float32)  # train_pos_labels and train_neg_labels are 1-dim numpy array
+    val_samples = torch.tensor(np.vstack((val_sample_pos, val_sample_neg)))
+    val_labels = torch.tensor(np.append(val_pos_labels, val_neg_labels), dtype=torch.int32)
     test_samples = torch.tensor(np.vstack((test_sample_pos, test_sample_neg)))
     test_labels = torch.tensor(np.append(test_pos_labels, test_neg_labels), dtype=torch.int32)
 
-    return train_samples, train_labels, test_samples, test_labels
+    return train_samples, train_labels, val_samples, val_labels,  test_samples, test_labels

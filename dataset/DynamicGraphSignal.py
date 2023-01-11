@@ -95,8 +95,8 @@ class DynamicGraphTemporalSignal(object):
         pos_item = self.sample_pos[time_index]
         neg_item = self.sample_neg[time_index]
 
-        train_samples, train_labels, test_samples, test_labels = train_test_split(pos_item, neg_item)
-        return train_samples, train_labels, test_samples, test_labels
+        train_samples, train_labels, val_samples, val_labels,  test_samples, test_labels = train_test_split(pos_item, neg_item)
+        return train_samples, train_labels, val_samples, val_labels,  test_samples, test_labels
 
 
         # if self.targets[time_index] is None:
@@ -135,12 +135,14 @@ class DynamicGraphTemporalSignal(object):
             x = self._get_features(time_index)
             edge_index = self._get_edge_index(time_index)
             edge_weight = self._get_edge_weight(time_index)
-            train_samples, train_labels, test_samples, test_labels = self._get_samples(time_index)
+            train_samples, train_labels, val_samples, val_labels, test_samples, test_labels = self._get_samples(time_index)
             # y = self._get_target(time_index)
             # additional_features = self._get_additional_features(time_index)
             additional_features = {'raw_graph': raw_graph,
                                     'train_samples': train_samples, 
                                     'train_labels': train_labels,
+                                    'val_samples': val_samples,
+                                    'val_labels': val_labels,
                                     'test_samples': test_samples,
                                     'test_labels': test_labels
             }
