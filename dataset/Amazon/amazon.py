@@ -15,14 +15,7 @@ from ..util import generate_degree_feats, create_edge_samples
 
 
 class AmazonDatasetLoader(object):
-    """A dataset of mobility and history of reported cases of Epinion
-    in England NUTS3 regions, from 3 March to 12 of May. The dataset is
-    segmented in days and the graph is directed and weighted. The graph
-    indicates how many people moved from one region to the other each day,
-    based on Facebook Data For Good disease prevention maps.
-    The node features correspond to the number of Epinion cases
-    in the region in the past **window** days. The task is to predict the
-    number of cases in each node after 1 day. 
+    """
     """
 
     def __init__(self, timesteps: int = 20):
