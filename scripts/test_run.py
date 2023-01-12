@@ -2,10 +2,14 @@ import argparse
 import logging
 import random
 import time
+import datetime
 import numpy as np
 import psutil
 import os, sys
 sys.path.append("..") 
+
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import torch
 import torch.distributed
@@ -21,7 +25,7 @@ models = ['DySAT']
 
 current_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
 log_file = current_path + '/log/example_experiment_stale_aggregation.log'
-logging.basicConfig(filename=log_file, filemode='a', level=logging.DEBUG)
+logging.basicConfig(filename=log_file, level=logging.DEBUG)
 # checkpoint_path = os.path.join() # save and load model states
 
 def _get_args():
@@ -102,7 +106,9 @@ def _main():
         args['local_rank'] = int(os.environ['LOCAL_RANK'])
         args['local_world_size'] = int(os.environ['LOCAL_WORLD_SIZE'])
         torch.cuda.set_device(args['local_rank'])
-        torch.distributed.init_process_group('nccl')
+        # torch.distributed.init_process_group('nccl')
+        torch.distributed.init_process_group(
+            'gloo', timeout=datetime.timedelta(seconds=36000))
         args['rank'] = torch.distributed.get_rank()
         args['world_size'] = torch.distributed.get_world_size()
     else:
@@ -121,6 +127,7 @@ def _main():
     node_feats_list, edge_feats_list = load_feat(
             dynamic_graph, shared_memory=args['distributed'],
             local_rank=args['local_rank'], local_world_size=args['local_world_size'])
+
 
 if __name__ == '__main__':
     _main()
