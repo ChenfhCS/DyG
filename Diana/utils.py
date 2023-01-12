@@ -114,7 +114,7 @@ def load_feat(dgraph, shared_memory: bool = False, local_rank: int = 0,
             torch.distributed.broadcast_object_list(
                 [node_feats_shape_list, edge_feats_shape_list], src = 0)
 
-        if local_rank != 0:
+        elif local_rank != 0:
             shapes = [list(), list()]
             torch.distributed.broadcast_object_list(
                 shapes, src=0)
@@ -123,10 +123,10 @@ def load_feat(dgraph, shared_memory: bool = False, local_rank: int = 0,
             for timestep, snapshot in enumerate(dgraph):
                 if len(node_feats_shape_list) != 0:
                     node_feats_list_shm.append(get_shared_mem_array(
-                        'node_feats{}'.format(timestep), node_feats_shape_list[timestep], torch.float32))
+                        'node_feats_{}'.format(timestep), node_feats_shape_list[timestep], torch.float32))
                 if len(edge_feats_shape_list) != 0:
                     edge_feats_list_shm.append(get_shared_mem_array(
-                        'edge_feats{}'.format(timestep), edge_feats_shape_list[timestep], torch.float32))
+                        'edge_feats_{}'.format(timestep), edge_feats_shape_list[timestep], torch.float32))
 
         torch.distributed.barrier()
         if len(node_feats_list_shm) != 0:
