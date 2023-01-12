@@ -98,14 +98,70 @@ class DynamicGraphTemporalSignal(object):
         train_samples, train_labels, val_samples, val_labels,  test_samples, test_labels = train_test_split(pos_item, neg_item)
         return train_samples, train_labels, val_samples, val_labels,  test_samples, test_labels
 
+    # def num_vertices(self) -> int:
+    #     return self._dgraph.num_vertices()
 
-        # if self.targets[time_index] is None:
-        #     return self.targets[time_index]
-        # else:
-        #     if self.targets[time_index].dtype.kind == "i":
-        #         return torch.LongTensor(self.targets[time_index])
-        #     elif self.targets[time_index].dtype.kind == "f":
-        #         return torch.FloatTensor(self.targets[time_index])
+    # def num_source_vertices(self) -> int:
+    #     return self._dgraph.num_source_vertices()
+
+    # def max_vertex_id(self) -> int:
+    #     return self._dgraph.max_vertex_id()
+
+    # def num_edges(self) -> int:
+    #     return self._dgraph.num_edges()
+
+    # def out_degree(self, vertexs: np.ndarray) -> np.ndarray:
+    #     return self._dgraph.out_degree(vertexs)
+
+    # def nodes(self) -> np.ndarray:
+    #     """
+    #     Return the nodes of the graph.
+    #     """
+    #     return self._dgraph.nodes()
+
+    # def src_nodes(self) -> np.ndarray:
+    #     """
+    #     Return the source nodes of the graph.
+    #     """
+    #     return self._dgraph.src_nodes()
+
+    # def edges(self) -> np.ndarray:
+    #     """
+    #     Return the edges of the graph.
+    #     """
+    #     return self._dgraph.edges()
+
+    # def get_temporal_neighbors(self, vertex: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    #     """
+    #     Return the neighbors of the specified vertex. The neighbors are sorted
+    #     by timestamps in decending order.
+
+    #     Note that this function is inefficient and should be used sparingly.
+
+    #     Args:
+    #         vertex: the vertex to get neighbors for.
+
+    #     Returns: A tuple of (target_vertices, timestamps, edge_ids)
+    #     """
+    #     return self._dgraph.get_temporal_neighbors(vertex)
+
+    # def avg_linked_list_length(self) -> float:
+    #     """
+    #     Return the average linked list length.
+    #     """
+    #     return self._dgraph.avg_linked_list_length()
+
+    # def get_graph_memory_usage(self) -> int:
+    #     """
+    #     Return the graph memory usage of the graph in bytes.
+    #     """
+    #     return self._dgraph.get_graph_memory_usage()
+
+    # def get_metadata_memory_usage(self) -> int:
+        """
+        Return the metadata memory usage of the graph in bytes.
+        """
+        return self._dgraph.get_metadata_memory_usage()
 
     def _get_additional_feature(self, time_index: int, feature_key: str):
         feature = getattr(self, feature_key)[time_index]
