@@ -30,7 +30,7 @@ class My_Model(torch.nn.Module):
         self.classifier = classifier(in_feature = 16)
 
     def forward(self, snapshots, samples):
-        str_emb, final_emb = self.dgnn.forward(snapshots)
+        str_emb, final_emb = self.dgnn.forward_lambda(snapshots)
         outputs = []
         for time, snapshot in enumerate(snapshots):
             emb = final_emb[:, time, :].to(self.args['device'])
