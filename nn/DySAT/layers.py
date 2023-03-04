@@ -3,10 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import time
 
-import copy
-from torch_scatter import scatter
-from torch_geometric.utils import softmax
-
 class GATLayer(nn.Module):
     def __init__(self, 
                 args,
