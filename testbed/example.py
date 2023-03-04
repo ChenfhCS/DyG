@@ -34,6 +34,8 @@ class My_Model(torch.nn.Module):
             str_emb, final_emb = self.dgnn.forward(snapshots)
         elif self.args['device'] == 'lambda':
             str_emb, final_emb = self.dgnn.forward_lambda(snapshots)
+        else:
+            raise Exception('There is no such an device type to support!')
         outputs = []
         for time, snapshot in enumerate(snapshots):
             emb = final_emb[:, time, :].to(self.args['device'])
