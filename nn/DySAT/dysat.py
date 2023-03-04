@@ -187,8 +187,6 @@ class DySAT(nn.Module):
             payloads.append(payload)
         
         results = parallel_lambda(payloads)
-        print(results)
-        return 0
 
         results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
         structural_outputs = [g[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
