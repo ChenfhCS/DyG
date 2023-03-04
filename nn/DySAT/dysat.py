@@ -189,7 +189,7 @@ class DySAT(nn.Module):
         results = parallel_lambda(payloads)
 
         results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
-        structural_outputs = [g[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
+        structural_outputs = [torch.tensor(g, dtype=torch.float32)[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
 
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
