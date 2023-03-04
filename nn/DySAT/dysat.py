@@ -166,10 +166,12 @@ class DySAT(nn.Module):
     def forward_lambda(self, graphs, gate = None, distribute = None):
         # 打包每个graph为payload，同时指定flag和layer参数
         payloads = []
-        with open('layer.pkl', 'wb') as f:
+        layer_path = os.path.join('mnt', 'efs', 'layer.pkl')
+        with open(layer_path, 'wb') as f:
             pickle.dump(self.structural_attn, f)
         for i, graph in enumerate(graphs):
-            with open('graph_{}.pkl'.format(i), 'wb') as f:
+            graph_path = os.path.join('mnt', 'efs', 'graph_{}.pkl'.format(i))
+            with open(graph_path, 'wb') as f:
                 pickle.dump(graph, f)
             payload = {
                 'flag': 'structural',
