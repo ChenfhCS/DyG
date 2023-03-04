@@ -33,7 +33,7 @@ def invoke_lambda(payload):
 def parallel_lambda(payloads):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = list(executor.map(invoke_lambda, payloads))
-    return results['out']
+    return results
 
 def _tensor_distance(tensor_A, tensor_B):
     sub_c = torch.sub(tensor_A, tensor_B)
@@ -189,7 +189,7 @@ class DySAT(nn.Module):
         results = parallel_lambda(payloads)
 
         results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
-        structural_outputs = [torch.tensor(g, dtype=torch.float32)[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
+        structural_outputs = [torch.tensor(g['out'], dtype=torch.float32)[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
 
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
