@@ -175,15 +175,11 @@ class DySAT(nn.Module):
         for i, graph in enumerate(graphs):
             graph_x_path = '/home/ubuntu/mnt/efs/graphs/graph_x_{}.pkl'.format(i)
             graph_edge_path = '/home/ubuntu/mnt/efs/graphs/graph_edge_{}.pkl'.format(i)
-            print('before save {} {}', graphs[i].x.size())
             with open(graph_x_path, 'wb') as f:
                 pickle.dump(graph.x, f)
             with open(graph_edge_path, 'wb') as f:
                 pickle.dump(graph.edge_index, f)
 
-            with open(graph_x_path, 'rb') as f:
-                graph_x = pickle.load(f)
-            print('after save {} {}', graph_x.size())
             payload = {
                 'flag': 'structural',
                 'layer_addr': '/mnt/efs/layers/layer.pt',
@@ -197,7 +193,7 @@ class DySAT(nn.Module):
 
         results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
         structural_outputs = [torch.tensor(g['out'], dtype=torch.float32)[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
-        
+
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
         out_dim = structural_outputs[-1].shape[-1]
