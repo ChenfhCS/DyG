@@ -38,10 +38,10 @@ class My_Model(torch.nn.Module):
         else:
             raise Exception('There is no such an device type to support!')
         outputs = []
-        for time, snapshot in enumerate(snapshots):
-            emb = final_emb[:, time, :].to(self.args['device'])
+        for t, snapshot in enumerate(snapshots):
+            emb = final_emb[:, t, :].to(self.args['device'])
 
-            sample = samples[time]
+            sample = samples[t]
             # get target embeddings
             source_id = sample[:, 0]
             target_id = sample[:, 1]
