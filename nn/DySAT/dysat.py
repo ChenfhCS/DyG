@@ -166,9 +166,10 @@ class DySAT(nn.Module):
     def forward_lambda(self, graphs, gate = None, distribute = None):
         # 打包每个graph为payload，同时指定flag和layer参数
         payloads = []
-        layer_path = '/home/ubuntu/mnt/efs/layers/layer.pkl'
-        with open(layer_path, 'wb') as f:
-            pickle.dump(self.structural_attn.state_dict(), f)
+        layer_path = '/home/ubuntu/mnt/efs/layers/layer.pt'
+        # with open(layer_path, 'wb') as f:
+        #     pickle.dump(self.structural_attn.state_dict(), f)
+        torch.save(self.structural_attn.state_dict(), layer_path)
         for i, graph in enumerate(graphs):
             graph_x_path = '/home/ubuntu/mnt/efs/graphs/graph_x_{}.pkl'.format(i)
             graph_edge_path = '/home/ubuntu/mnt/efs/graphs/graph_edge_{}.pkl'.format(i)
