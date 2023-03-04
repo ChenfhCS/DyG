@@ -103,12 +103,10 @@ class DySAT(nn.Module):
 
     def forward(self, graphs, gate = None, distribute = None):
         structural_out = []
-        print('before layer size {} {}', graphs[0].x.size(), graphs[1].x.size())
         for t in range(0, self.num_time_steps):
             # graphs[t] = graphs[t].to(self.device)
             structural_out.append(self.structural_attn(graphs[t]))
         structural_outputs = [g[:,None,:] for g in structural_out] # list of [Ni, 1, F]
-        print('after layer size {} {}', structural_outputs[0].size(), structural_outputs[1].size())
 
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
