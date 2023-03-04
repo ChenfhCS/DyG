@@ -164,6 +164,7 @@ class DySAT(nn.Module):
         return structural_outputs_padded, temporal_out
 
     def forward_lambda(self, graphs, gate = None, distribute = None):
+        print('before layer size {} {}', graphs[0].x.size(), graphs[1].x.size())
         # 打包每个graph为payload，同时指定flag和layer参数
         payloads = []
         layer_path = '/home/ubuntu/mnt/efs/layers/layer.pt'
@@ -191,6 +192,7 @@ class DySAT(nn.Module):
         results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
         structural_outputs = [torch.tensor(g['out'], dtype=torch.float32)[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
 
+        print('after layer size {} {}', structural_outputs[0].size(), structural_outputs[1].size())
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
         out_dim = structural_outputs[-1].shape[-1]
