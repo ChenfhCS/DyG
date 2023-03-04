@@ -127,6 +127,7 @@ def run_example(args, logger):
     loss_log = []
     best_acc = 0
 
+    time_start = time.time()
     for epoch in range(args['epochs']):
         model.train()
         loss = 0
@@ -164,8 +165,9 @@ def run_example(args, logger):
             if best_acc <= acc:
                 best_acc = acc
         print('epoch: {} loss: {:.4f} acc: {:.4f} GPU memory {:.3f}'.format(epoch, loss.item(), acc, gpu_mem_alloc))
-    print('best accuracy: {:.3f}'.format(best_acc))
-    logger.info('{} | T: {} | accuracy: {:.3f}'.format(args['dataset'], args['timesteps'], best_acc))
+    time_end = time.time()
+    print('best accuracy: {:.3f} | total cost {:.3f}'.format(best_acc, time_end - time_start))
+    logger.info('device: {} | {} | T: {} | accuracy: {:.3f} | time: {:.3f}'.format(args['device'], args['dataset'], args['timesteps'], best_acc, time_end - time_start))
 
 def run_experiment_stale_aggregation_comm(args):
     # print hyper-parameters
