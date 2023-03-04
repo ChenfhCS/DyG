@@ -169,7 +169,7 @@ class DySAT(nn.Module):
         layer_path = '/home/ubuntu/mnt/efs/layers/layer.pt'
         # with open(layer_path, 'wb') as f:
         #     pickle.dump(self.structural_attn.state_dict(), f)
-        torch.save(self.structural_attn.state_dict(), layer_path)
+        torch.save(self.structural_attn.state_dict(), layer_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
         for i, graph in enumerate(graphs):
             graph_x_path = '/home/ubuntu/mnt/efs/graphs/graph_x_{}.pkl'.format(i)
             graph_edge_path = '/home/ubuntu/mnt/efs/graphs/graph_edge_{}.pkl'.format(i)
