@@ -7,6 +7,63 @@ import copy
 from torch_scatter import scatter
 from torch_geometric.utils import softmax
 
+class GATLayer(nn.Module):
+    def __init__(self, 
+                args,
+                input_dim, 
+                output_dim, 
+                n_heads, 
+                attn_drop, 
+                ffd_drop,
+                residual):
+        super(GATLayer, self).__init__()
+        self.args = args
+        self.in_dim = input_dim
+        self.out_dim = output_dim // n_heads
+        self.num_heads = n_heads
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.ffd_drop = nn.Dropout(ffd_drop)
+        self.residual = residual
+        if self.residual:
+            self.lin_residual = nn.Linear(input_dim, n_heads * self.out_dim, bias=False)
+        self.LeakyReLU = nn.LeakyReLU(negative_slope=0.2)
+
+        # define linear layers and attention parameters
+        self.W = nn.Linear(self.in_dim, self.out_dim * self.num_heads)
+        self.a_l = nn.Parameter(torch.empty(size=(1, self.num_heads, self.out_dim)))
+        self.a_r = nn.Parameter(torch.empty(size=(1, self.num_heads, self.out_dim)))
+        nn.init.xavier_uniform_(self.W.weight)
+        nn.init.xavier_uniform_(self.a_l)
+        nn.init.xavier_uniform_(self.a_r)
+    
+    def forward(self, graph):
+        x = graph.x
+        edge_index = graph.edge_index
+
+        # apply linear transformation
+        x = self.W(x).view(-1, self.num_heads, self.out_dim)  # [N, heads, out_dim]
+
+        # attention
+        alpha_l = (x * self.a_l).sum(-1).squeeze()
+        alpha_r = (x * self.a_r).sum(-1).squeeze()
+        alpha = alpha_l[edge_index[0]] + alpha_r[edge_index[1]]
+        alpha = self.LeakyReLU(alpha)
+
+        # softmax
+        alpha = alpha - alpha.max(dim = 1, keepdim=True)[0]
+        alpha = alpha.exp()
+        alpha_sum = torch.zeros((x.size(0), self.num_heads)).to(alpha.device)
+        alpha_sum = alpha_sum.scatter_add_(0, edge_index[0].unsqueeze(1).repeat(1, self.num_heads), alpha)
+        alpha = alpha / alpha_sum[edge_index[0]]  # [E, H]
+
+        # scatter
+        out = torch.zeros((x.size(0), self.num_heads * self.out_dim)).to(alpha.device)
+        out = out.scatter_add_(0, edge_index[0].unsqueeze(1).repeat(1, self.num_heads * self.out_dim), 
+                                (x[edge_index[1]] * alpha.unsqueeze(-1)).reshape(-1, self.num_heads*self.out_dim))
+        out = out + x.reshape(-1, self.num_heads*self.out_dim)
+
+        return out
+
 class GAT_Layer(nn.Module):
     def __init__(self, 
                 args,
@@ -42,7 +99,6 @@ class GAT_Layer(nn.Module):
     def forward(self, graph):
         # graph = copy.deepcopy(graph)
         edge_index = graph.edge_index
-        # edge_weight = graph.edge_weight.reshape(-1, 1)
         H, C = self.n_heads, self.out_dim
         x = self.lin(graph.x).view(-1, H, C) # [N, heads, out_dim
         # attention
@@ -51,9 +107,8 @@ class GAT_Layer(nn.Module):
         alpha_l = alpha_l[edge_index[0]] # [num_edges, heads]
         alpha_r = alpha_r[edge_index[1]]
         alpha = alpha_r + alpha_l
-        # alpha = edge_weight * alpha
         alpha = self.leaky_relu(alpha)
-        coefficients = softmax(alpha, edge_index[1]) # [num_edges, heads]
+        coefficients = F.softmax(alpha, edge_index[1]) # [num_edges, heads]
 
         # dropout
         if self.training:
@@ -70,8 +125,6 @@ class GAT_Layer(nn.Module):
         if self.residual:
             out = out + self.lin_residual(graph.x)
         return out
-        # graph.x = out
-        # return graph
 
 
 class ATT_layer(nn.Module):

@@ -29,8 +29,8 @@ class My_Model(torch.nn.Module):
         self.dgnn = DySAT(args, num_features = node_features)
         self.classifier = classifier(in_feature = 16)
 
-    def forward(self, snapshots, samples, epoch = 0):
-        str_emb, final_emb = self.dgnn(snapshots, epoch=epoch)
+    def forward(self, snapshots, samples):
+        str_emb, final_emb = self.dgnn.forward(snapshots)
         outputs = []
         for time, snapshot in enumerate(snapshots):
             emb = final_emb[:, time, :].to(self.args['device'])
@@ -89,7 +89,78 @@ def _save_log(args, loss_log, acc_log):
     df_acc=pd.DataFrame(data=acc_log)
     df_acc.to_csv('./log/{}_{}_acc.csv'.format(args['dataset'], args['timesteps']), header=False)
 
-def run_example(args):
+def run_example(args, logger):
+    # print hyper-parameters
+    print(args)
+
+    args['rank'] = 0
+    args['device'] = torch.device("cpu")
+    args['stale'] = False
+    # args['device'] = 'cpu'
+    if args['dataset'] == 'Epinion':
+        loader = EpinionDatasetLoader(timesteps = args['timesteps'])
+    elif args['dataset'] == 'Amazon':
+        loader = AmazonDatasetLoader(timesteps = args['timesteps'])
+    elif args['dataset'] == 'Movie':
+        loader = MovieDatasetLoader(timesteps = args['timesteps'])
+    elif args['dataset'] == 'Stack':
+        loader = StackDatasetLoader(timesteps = args['timesteps'])
+    else:
+        raise ValueError("No such dataset...")
+    dataset = loader.get_dataset()
+    snapshots = [snapshot for snapshot in dataset]
+    for graph in snapshots:
+        graph = graph.to(args['device'])
+    model = My_Model(args, node_features = 2).to(args['device'])
+
+    loss_func = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.001)
+
+    acc_log = []
+    loss_log = []
+    best_acc = 0
+
+    for epoch in range(args['epochs']):
+        model.train()
+        loss = 0
+        samples = [snapshot.train_samples for snapshot in snapshots]
+        structural_outputs, temporal_outputs, outputs = model(snapshots, samples)
+        gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
+
+        for time, snapshot in enumerate(snapshots):
+            y = outputs[time]
+            label = snapshot.train_labels
+            # print('emb size: {}, target_id size: {}'.format(y.size(), label.size()))
+            error = loss_func(y.squeeze(dim=-1), label)
+            loss += error
+        loss = loss/len(snapshots)
+        loss_log.append(loss.item())
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+        # print('epoch: {} loss: {}'.format(epoch, loss.item()))
+
+        with torch.no_grad():
+            model.eval()
+            ACC = 0
+            samples = [snapshot.test_samples for snapshot in snapshots]
+            _, _, outputs = model(snapshots, samples)
+            for time, snapshot in enumerate(snapshots):
+                y = outputs[time]
+                label = snapshot.test_labels.cpu().numpy()
+                prob_f1 = []
+                prob_auc = []   
+                prob_f1.extend(np.argmax(y.detach().cpu().numpy(), axis = 1))
+                ACC += sum(prob_f1 == label)/len(label)
+            acc = ACC/len(snapshots)
+            acc_log.append(acc)
+            if best_acc <= acc:
+                best_acc = acc
+        print('epoch: {} loss: {:.4f} acc: {:.4f} GPU memory {:.3f}'.format(epoch, loss.item(), acc, gpu_mem_alloc))
+    print('best accuracy: {:.3f}'.format(best_acc))
+    logger.info('{} | T: {} | accuracy: {:.3f}'.format(args['dataset'], args['timesteps'], best_acc))
+
+def run_experiment_stale_aggregation_comm(args):
     # print hyper-parameters
     print(args)
     # print('dataset: {} timesteps: {}'.format(args['dataset'], args['timesteps']))
@@ -380,8 +451,7 @@ if __name__ == '__main__':
         experiments_datasets = ['Amazon', 'Epinion', 'Movie', 'Stack']
         for dataset in experiments_datasets:
             args['dataset'] = dataset
-            run_example(args)
-            str_reduce, tem_reduce = run_example(args)
+            str_reduce, tem_reduce = run_experiment_stale_aggregation_comm(args)
             reduced_communication_str.append(str_reduce)
             reduced_communication_tem.append(tem_reduce)
         print('average reduced spatial communication: {} | reduced temporal communication: {}'.format(reduced_communication_str, reduced_communication_tem))
@@ -392,6 +462,20 @@ if __name__ == '__main__':
             args['dataset'] = dataset
             run_experiment_fusion(args)
     
+    elif args['experiments'] == 'default':
+        current_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
+        log_file = current_path + '/log/example.log'
+        logging.basicConfig(filename=log_file,
+                                filemode='a',
+                                format='%(message)s',
+                                level=logging.INFO)
+        # logging.basicConfig(level=logging.INFO, format='%(message)s')
+        logger = logging.getLogger('example')
+        experiments_datasets = ['Amazon']
+        for dataset in experiments_datasets:
+            args['dataset'] = dataset
+            run_example(args, logger)
+
     else:
         raise Exception('There is no such an experiment type!')
 

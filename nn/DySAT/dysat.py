@@ -3,7 +3,10 @@ import sys
 import copy
 import torch
 import time
-import numpy as np
+import json
+
+import boto3
+import concurrent.futures
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -11,10 +14,25 @@ import torch.nn.functional as F
 # from Model.layers import StructuralAttentionLayer
 # from Model.layers import TemporalAttentionLayer
 
-from .layers import GAT_Layer as StructuralAttentionLayer
+from .layers import GATLayer as StructuralAttentionLayer
 from .layers import ATT_layer as TemporalAttentionLayer
 
 # from utils import *
+
+lambda_client = boto3.client('lambda')
+def invoke_lambda(payload):
+    response = lambda_client.invoke(
+        FunctionName='layer_forward',
+        InvocationType='RequestResponse', # 同步调用
+        Payload=json.dumps(payload),
+    )
+    result = json.loads(response['Payload'].read().decode('utf-8'))
+    return result
+
+def parallel_lambda(payloads):
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        results = list(executor.map(invoke_lambda, payloads))
+    return results
 
 def _tensor_distance(tensor_A, tensor_B):
     sub_c = torch.sub(tensor_A, tensor_B)
@@ -144,34 +162,90 @@ class DySAT(nn.Module):
 
         return structural_outputs_padded, temporal_out
 
+    def forward_lambda(self, graphs, gate = None, distribute = None):
+        # 打包每个graph为payload，同时指定flag和layer参数
+        payloads = []
+        str_layer_para = {
+            'W': self.structural_attn.W,
+            'a_l': self.structural_attn.a_l,
+            'a_r': self.structural_attn.a_r
+        }
+        for i, graph in enumerate(graphs):
+            payload = {
+                'flag': 'default',
+                'index': i
+            }
+            payloads.append(payload)
+        
+        results = parallel_lambda(payloads)
+        print(results)
+        return 0
+
+        results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
+        structural_outputs = [g[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
+
+        # padding outputs along with Ni
+        maximum_node_num = structural_outputs[-1].shape[0]
+        out_dim = structural_outputs[-1].shape[-1]
+        structural_outputs_padded = []
+        for out in structural_outputs:
+            zero_padding = torch.zeros(maximum_node_num-out.shape[0], 1, out_dim).to(out.device)
+            padded = torch.cat((out, zero_padding), dim=0)
+            structural_outputs_padded.append(padded)
+        structural_outputs_padded = torch.cat(structural_outputs_padded, dim=1) # [N, T, F]
+
+        temporal_out = self.temporal_attn(structural_outputs_padded)
+        
+        return structural_outputs_padded, temporal_out
+
     # construct model
     def build_model(self):
         input_dim = self.num_features
-        # 1: Structural Attention Layers
-        structural_attention_layers = nn.Sequential()
-        for i in range(len(self.structural_layer_config)):
-            layer = StructuralAttentionLayer(args=self.args,
+        str_layer = StructuralAttentionLayer(args=self.args,
                                              input_dim=input_dim,
-                                             output_dim=self.structural_layer_config[i],
-                                             n_heads=self.structural_head_config[i],
+                                             output_dim=self.structural_layer_config[0],
+                                             n_heads=self.structural_head_config[0],
                                              attn_drop=self.spatial_drop,
                                              ffd_drop=self.spatial_drop,
                                              residual=self.residual)
-            structural_attention_layers.add_module(name="structural_layer_{}".format(i), module=layer)
-            input_dim = self.structural_layer_config[i]
-
-        # 2: Temporal Attention Layers
+        
         input_dim = self.structural_layer_config[-1]
-        temporal_attention_layers = nn.Sequential()
-        for i in range(len(self.temporal_layer_config)):
-            layer = TemporalAttentionLayer(self.args,
+        tem_layer = TemporalAttentionLayer(self.args,
                                            method=0,
                                            input_dim=input_dim,
-                                           n_heads=self.temporal_head_config[i],
+                                           n_heads=self.temporal_head_config[0],
                                            num_time_steps=self.temporal_time_steps,
                                            attn_drop=self.temporal_drop,
                                            residual=self.residual,
                                            interval_ratio = self.interval_ratio)
-            temporal_attention_layers.add_module(name="temporal_layer_{}".format(i), module=layer)
-            input_dim = self.temporal_layer_config[i]
-        return structural_attention_layers, temporal_attention_layers
+        return str_layer, tem_layer
+
+
+        # # 1: Structural Attention Layers
+        # structural_attention_layers = nn.Sequential()
+        # for i in range(len(self.structural_layer_config)):
+        #     layer = StructuralAttentionLayer(args=self.args,
+        #                                      input_dim=input_dim,
+        #                                      output_dim=self.structural_layer_config[i],
+        #                                      n_heads=self.structural_head_config[i],
+        #                                      attn_drop=self.spatial_drop,
+        #                                      ffd_drop=self.spatial_drop,
+        #                                      residual=self.residual)
+        #     structural_attention_layers.add_module(name="structural_layer_{}".format(i), module=layer)
+        #     input_dim = self.structural_layer_config[i]
+
+        # # 2: Temporal Attention Layers
+        # input_dim = self.structural_layer_config[-1]
+        # temporal_attention_layers = nn.Sequential()
+        # for i in range(len(self.temporal_layer_config)):
+        #     layer = TemporalAttentionLayer(self.args,
+        #                                    method=0,
+        #                                    input_dim=input_dim,
+        #                                    n_heads=self.temporal_head_config[i],
+        #                                    num_time_steps=self.temporal_time_steps,
+        #                                    attn_drop=self.temporal_drop,
+        #                                    residual=self.residual,
+        #                                    interval_ratio = self.interval_ratio)
+        #     temporal_attention_layers.add_module(name="temporal_layer_{}".format(i), module=layer)
+        #     input_dim = self.temporal_layer_config[i]
+        # return structural_attention_layers, temporal_attention_layers

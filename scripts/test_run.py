@@ -123,9 +123,9 @@ def _main():
     set_seed(args['seed'])
 
     # build dynamic graph
-    dynamic_graph = build_dynamic_graph(args)
+    dgraph = build_dynamic_graph(args)
     node_feats_list, edge_feats_list = load_feat(
-            dynamic_graph, shared_memory=args['distributed'],
+            dgraph, shared_memory=args['distributed'],
             local_rank=args['local_rank'], local_world_size=args['local_world_size'])
 
 
