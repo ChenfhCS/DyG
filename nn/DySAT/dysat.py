@@ -210,6 +210,25 @@ class DySAT(nn.Module):
     # construct model
     def build_model(self):
         input_dim = self.num_features
+
+        structural_layer = StructuralAttentionLayer(args=self.args,
+                                             input_dim=input_dim,
+                                             output_dim=self.structural_layer_config[0],
+                                             n_heads=self.structural_head_config[0],
+                                             attn_drop=self.spatial_drop,
+                                             ffd_drop=self.spatial_drop,
+                                             residual=self.residual)
+
+        input_dim = self.structural_layer_config[-1]
+        temporal_layer = TemporalAttentionLayer(self.args,
+                                           method=0,
+                                           input_dim=input_dim,
+                                           n_heads=self.temporal_head_config[0],
+                                           num_time_steps=self.temporal_time_steps,
+                                           attn_drop=self.temporal_drop,
+                                           residual=self.residual,
+                                           interval_ratio = self.interval_ratio)
+        return structural_layer, temporal_layer
         # 1: Structural Attention Layers
         structural_attention_layers = nn.Sequential()
         for i in range(len(self.structural_layer_config)):
