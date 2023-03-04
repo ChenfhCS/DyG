@@ -30,7 +30,10 @@ class My_Model(torch.nn.Module):
         self.classifier = classifier(in_feature = 16)
 
     def forward(self, snapshots, samples):
-        str_emb, final_emb = self.dgnn.forward_lambda(snapshots)
+        if self.args['device'] == 'cpu' or 'gpu':
+            str_emb, final_emb = self.dgnn.forward(snapshots)
+        elif self.args['device'] == 'lambda':
+            str_emb, final_emb = self.dgnn.forward_lambda(snapshots)
         outputs = []
         for time, snapshot in enumerate(snapshots):
             emb = final_emb[:, time, :].to(self.args['device'])
@@ -59,6 +62,8 @@ def _get_args():
                     help="experiment type")
     parser.add_argument('--world_size', type=int, default=2,
                         help='method for DGNN training')
+    parser.add_argument('--device', type=str, default='cpu',
+                        help='training device')
     args = vars(parser.parse_args())
     return args
 
