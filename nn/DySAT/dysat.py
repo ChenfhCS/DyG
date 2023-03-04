@@ -179,7 +179,7 @@ class DySAT(nn.Module):
                 pickle.dump(graph.edge_index, f)
             payload = {
                 'flag': 'structural',
-                'layer_addr': '/mnt/efs/layers/layer.pkl',
+                'layer_addr': '/mnt/efs/layers/layer.pt',
                 'graph_x_addr': '/mnt/efs/graphs/graph_x_{}.pkl'.format(i),
                 'graph_edge_addr': '/mnt/efs/graphs/graph_edge_{}.pkl'.format(i),
                 'index': i
