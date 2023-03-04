@@ -136,8 +136,8 @@ def run_example(args, logger):
         structural_outputs, temporal_outputs, outputs = model(snapshots, samples)
         gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
 
-        for time, snapshot in enumerate(snapshots):
-            y = outputs[time]
+        for t, snapshot in enumerate(snapshots):
+            y = outputs[t]
             label = snapshot.train_labels
             # print('emb size: {}, target_id size: {}'.format(y.size(), label.size()))
             error = loss_func(y.squeeze(dim=-1), label)
@@ -154,8 +154,8 @@ def run_example(args, logger):
             ACC = 0
             samples = [snapshot.test_samples for snapshot in snapshots]
             _, _, outputs = model(snapshots, samples)
-            for time, snapshot in enumerate(snapshots):
-                y = outputs[time]
+            for t, snapshot in enumerate(snapshots):
+                y = outputs[t]
                 label = snapshot.test_labels.cpu().numpy()
                 prob_f1 = []
                 prob_auc = []   
