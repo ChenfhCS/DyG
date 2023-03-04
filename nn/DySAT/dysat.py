@@ -168,7 +168,7 @@ class DySAT(nn.Module):
         payloads = []
         layer_path = '/home/ubuntu/mnt/efs/layers/layer.pkl'
         with open(layer_path, 'wb') as f:
-            pickle.dump(self.structural_attn.state_dict(), f)
+            pickle.dump(self.structural_attn, f)
         for i, graph in enumerate(graphs):
             graph_x_path = '/home/ubuntu/mnt/efs/graphs/graph_x_{}.pkl'.format(i)
             graph_edge_path = '/home/ubuntu/mnt/efs/graphs/graph_edge_{}.pkl'.format(i)
