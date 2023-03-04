@@ -33,7 +33,7 @@ def invoke_lambda(payload):
 def parallel_lambda(payloads):
     with concurrent.futures.ThreadPoolExecutor() as executor:
         results = list(executor.map(invoke_lambda, payloads))
-    return results
+    return results['out']
 
 def _tensor_distance(tensor_A, tensor_B):
     sub_c = torch.sub(tensor_A, tensor_B)
