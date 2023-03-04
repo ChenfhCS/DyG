@@ -179,8 +179,8 @@ class DySAT(nn.Module):
             payload = {
                 'flag': 'structural',
                 'layer_addr': '/mnt/efs/layer.pkl',
-                'graph_x_addr': '/mnt/efs/graph_x_{}.pkl'.format(i),
-                'graph_edge_addr': '/mnt/efs/graph_edge_{}.pkl'.format(i),
+                'graph_x_addr': '/mnt/efs/graphs/graph_x_{}.pkl'.format(i),
+                'graph_edge_addr': '/mnt/efs/graphs/graph_edge_{}.pkl'.format(i),
                 'index': i
             }
             payloads.append(payload)
