@@ -103,10 +103,12 @@ class DySAT(nn.Module):
 
     def forward(self, graphs, gate = None, distribute = None):
         structural_out = []
+        print('before layer size {} {}', graphs[0].x.size(), graphs[1].x.size())
         for t in range(0, self.num_time_steps):
             # graphs[t] = graphs[t].to(self.device)
             structural_out.append(self.structural_attn(graphs[t]))
         structural_outputs = [g[:,None,:] for g in structural_out] # list of [Ni, 1, F]
+        print('after layer size {} {}', structural_outputs[0].size(), structural_outputs[1].size())
 
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
@@ -164,7 +166,6 @@ class DySAT(nn.Module):
         return structural_outputs_padded, temporal_out
 
     def forward_lambda(self, graphs, gate = None, distribute = None):
-        print('before layer size {} {}', graphs[0].x.size(), graphs[1].x.size())
         # 打包每个graph为payload，同时指定flag和layer参数
         payloads = []
         layer_path = '/home/ubuntu/mnt/efs/layers/layer.pt'
@@ -174,10 +175,15 @@ class DySAT(nn.Module):
         for i, graph in enumerate(graphs):
             graph_x_path = '/home/ubuntu/mnt/efs/graphs/graph_x_{}.pkl'.format(i)
             graph_edge_path = '/home/ubuntu/mnt/efs/graphs/graph_edge_{}.pkl'.format(i)
+            print('before save {} {}', graphs[i].x.size())
             with open(graph_x_path, 'wb') as f:
                 pickle.dump(graph.x, f)
             with open(graph_edge_path, 'wb') as f:
                 pickle.dump(graph.edge_index, f)
+
+            with open(graph_x_path, 'rb') as f:
+                graph_x = pickle.load(f)
+            print('after save {} {}', graph_x.size())
             payload = {
                 'flag': 'structural',
                 'layer_addr': '/mnt/efs/layers/layer.pt',
@@ -191,8 +197,7 @@ class DySAT(nn.Module):
 
         results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
         structural_outputs = [torch.tensor(g['out'], dtype=torch.float32)[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
-
-        print('after layer size {} {}', structural_outputs[0].size(), structural_outputs[1].size())
+        
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
         out_dim = structural_outputs[-1].shape[-1]
