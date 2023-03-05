@@ -100,7 +100,6 @@ def _save_log(args, loss_log, acc_log):
 def run_example(args, logger):
     # print hyper-parameters
     print(args)
-
     args['rank'] = 0
     args['stale'] = False
     if args['testbed'] == 'cpu' or 'lambda':
