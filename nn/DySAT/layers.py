@@ -33,31 +33,31 @@ class GATLayer(nn.Module):
         nn.init.xavier_uniform_(self.a_r)
     
     def forward(self, graph):
-        x = graph.x
-        edge_index = graph.edge_index
+        for i in range(20):
+            x = graph.x
+            edge_index = graph.edge_index
 
-        # apply linear transformation
-        x = self.W(x).view(-1, self.num_heads, self.out_dim)  # [N, heads, out_dim]
+            # apply linear transformation
+            x = self.W(x).view(-1, self.num_heads, self.out_dim)  # [N, heads, out_dim]
 
-        # attention
-        alpha_l = (x * self.a_l).sum(-1).squeeze()
-        alpha_r = (x * self.a_r).sum(-1).squeeze()
-        alpha = alpha_l[edge_index[0]] + alpha_r[edge_index[1]]
-        alpha = self.LeakyReLU(alpha)
+            # attention
+            alpha_l = (x * self.a_l).sum(-1).squeeze()
+            alpha_r = (x * self.a_r).sum(-1).squeeze()
+            alpha = alpha_l[edge_index[0]] + alpha_r[edge_index[1]]
+            alpha = self.LeakyReLU(alpha)
 
-        # softmax
-        alpha = alpha - alpha.max(dim = 1, keepdim=True)[0]
-        alpha = alpha.exp()
-        alpha_sum = torch.zeros((x.size(0), self.num_heads)).to(alpha.device)
-        alpha_sum = alpha_sum.scatter_add_(0, edge_index[0].unsqueeze(1).repeat(1, self.num_heads), alpha)
-        alpha = alpha / alpha_sum[edge_index[0]]  # [E, H]
+            # softmax
+            alpha = alpha - alpha.max(dim = 1, keepdim=True)[0]
+            alpha = alpha.exp()
+            alpha_sum = torch.zeros((x.size(0), self.num_heads)).to(alpha.device)
+            alpha_sum = alpha_sum.scatter_add_(0, edge_index[0].unsqueeze(1).repeat(1, self.num_heads), alpha)
+            alpha = alpha / alpha_sum[edge_index[0]]  # [E, H]
 
-        # scatter
-        out = torch.zeros((x.size(0), self.num_heads * self.out_dim)).to(alpha.device)
-        out = out.scatter_add_(0, edge_index[0].unsqueeze(1).repeat(1, self.num_heads * self.out_dim), 
-                                (x[edge_index[1]] * alpha.unsqueeze(-1)).reshape(-1, self.num_heads*self.out_dim))
-        out = out + x.reshape(-1, self.num_heads*self.out_dim)
-
+            # scatter
+            out = torch.zeros((x.size(0), self.num_heads * self.out_dim)).to(alpha.device)
+            out = out.scatter_add_(0, edge_index[0].unsqueeze(1).repeat(1, self.num_heads * self.out_dim), 
+                                    (x[edge_index[1]] * alpha.unsqueeze(-1)).reshape(-1, self.num_heads*self.out_dim))
+            out = out + x.reshape(-1, self.num_heads*self.out_dim)
         return out
 
 class GAT_Layer(nn.Module):
