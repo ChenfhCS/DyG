@@ -22,7 +22,7 @@ from .layers import ATT_layer as TemporalAttentionLayer
 
 lambda_client = boto3.client('lambda')
 LAMBDA_FUNCTION_NAME = 'layer_forward'
-LAMBDA_POOL_SIZE = 10
+LAMBDA_POOL_SIZE = 30
 lambda_pool = ThreadPoolExecutor(max_workers = LAMBDA_POOL_SIZE)
 
 def invoke_lambda(payload):
