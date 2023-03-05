@@ -46,12 +46,9 @@ def parallel_lambda(payloads):
         future = lambda_pool.submit(invoke_lambda, payload)
         futures.append(future)
     
-    results = []
-    for future in as_completed(futures):
-        results.append(future.result())
-    # results = [future.result() for future in as_completed(futures)]
-    results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
-    return results_sorted
+    results = [future.result() for future in as_completed(futures)]
+    results_sorted = sorted(zip([p['index'] for p in payloads], results), key=lambda x: x[0])
+    return [r for _, r in results_sorted]
 
 def _tensor_distance(tensor_A, tensor_B):
     sub_c = torch.sub(tensor_A, tensor_B)
