@@ -102,9 +102,12 @@ def run_example(args, logger):
     print(args)
 
     args['rank'] = 0
-    args['device'] = torch.device("cpu")
     args['stale'] = False
-    # args['device'] = 'cpu'
+    if args['device'] == 'cpu' or 'lambda':
+        args['device'] = torch.device("cpu")
+    elif args['device'] == 'gpu':
+        args['device'] = torch.device("cuda")
+
     if args['dataset'] == 'Epinion':
         loader = EpinionDatasetLoader(timesteps = args['timesteps'])
     elif args['dataset'] == 'Amazon':

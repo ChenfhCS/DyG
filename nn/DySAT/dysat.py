@@ -166,10 +166,11 @@ class DySAT(nn.Module):
     def forward_lambda(self, graphs, gate = None, distribute = None):
         # 打包每个graph为payload，同时指定flag和layer参数
         payloads = []
+        time_start = time.time()
         layer_path = '/home/ubuntu/mnt/efs/layers/layer.pt'
-        # with open(layer_path, 'wb') as f:
-        #     pickle.dump(self.structural_attn.state_dict(), f)
         torch.save(self.structural_attn.state_dict(), layer_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
+        print('time to save layer parameters: ', time.time() - time_start)
+        time_start = time.time()
         for i, graph in enumerate(graphs):
             graph_x_path = '/home/ubuntu/mnt/efs/graphs/graph_x_{}.pkl'.format(i)
             graph_edge_path = '/home/ubuntu/mnt/efs/graphs/graph_edge_{}.pkl'.format(i)
@@ -177,7 +178,6 @@ class DySAT(nn.Module):
                 pickle.dump(graph.x, f)
             with open(graph_edge_path, 'wb') as f:
                 pickle.dump(graph.edge_index, f)
-
             payload = {
                 'flag': 'structural',
                 'layer_addr': '/mnt/efs/layers/layer.pt',
@@ -186,11 +186,15 @@ class DySAT(nn.Module):
                 'index': i
             }
             payloads.append(payload)
-        
+        print('time to save graph data: ', time.time() - time_start)
+        time_start = time.time()
         results = parallel_lambda(payloads)
+        print('time to launch lambda instances: ', time.time() - time_start)
 
+        time_start = time.time()
         results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
         structural_outputs = [torch.tensor(g['out'], dtype=torch.float32)[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
+        print('time to reshape outputs from lambda instances: ', time.time() - time_start)
 
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
@@ -201,6 +205,8 @@ class DySAT(nn.Module):
             padded = torch.cat((out, zero_padding), dim=0)
             structural_outputs_padded.append(padded)
         structural_outputs_padded = torch.cat(structural_outputs_padded, dim=1) # [N, T, F]
+
+        # split structural_outputs_padded into multiple pieces and adopt lambda
 
         temporal_out = self.temporal_attn(structural_outputs_padded)
         
