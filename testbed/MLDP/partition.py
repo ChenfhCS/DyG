@@ -6,7 +6,7 @@ import networkx as nx
 import math
 import random
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 # from data_process import load_data, generate_graphs, graph_concat
@@ -222,7 +222,7 @@ def Cross_nodes(timesteps, nodes_list, current_workload, workload):
     return num
 
 
-def plot_graph(args,G, node_color, edge_color, pos, flag):
+# def plot_graph(args,G, node_color, edge_color, pos, flag):
     # node_color_mask = {}
     # node_color_mask[0] = 'red'
     # node_color_mask[1] = 'blue'
@@ -236,14 +236,14 @@ def plot_graph(args,G, node_color, edge_color, pos, flag):
     # edge_color_mask['tem'] = 'green'
     # edges_colors = [edge_color_mask[G.edges[edge]['type']] for edge in G.edges()]
 
-    fig, ax = plt.subplots()
-    nx.draw(G, ax=ax, node_size=5, 
-	        width=0.5,
-            pos=pos,
-            node_color=node_color,
-            edge_color=edge_color)
-    plt.savefig('./experiment_results/{}_graph_{}.png'.format(flag, args['dataset']), dpi=300)
-    plt.close()
+    # fig, ax = plt.subplots()
+    # nx.draw(G, ax=ax, node_size=5, 
+	#         width=0.5,
+    #         pos=pos,
+    #         node_color=node_color,
+    #         edge_color=edge_color)
+    # plt.savefig('./experiment_results/{}_graph_{}.png'.format(flag, args['dataset']), dpi=300)
+    # plt.close()
 
 def Computation_time(graphs, num_devices, timesteps, workload_GCN, workload_RNN, GCN_comp_scale, ATT_comp_scale):
     device = torch.device("cuda")
