@@ -32,7 +32,6 @@ def _warmup_lambda(lambda_client, function_name, num_warmup_invocations):
         FunctionName = function_name,
         ProvisionedConcurrentExecutions = num_warmup_invocations,
         Qualifier = 'PROD',
-        TimeoutInSeconds = 900,
     )
 
     for i in range(num_warmup_invocations):
@@ -161,7 +160,7 @@ def run_example(args, logger):
     function_name = 'layer_forward'
     pool_size = 30
     _warmup_lambda(lambda_client, function_name, pool_size)
-    
+
     time_start = time.time()
     for epoch in range(args['epochs']):
         model.train()
