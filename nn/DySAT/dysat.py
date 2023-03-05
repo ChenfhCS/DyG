@@ -7,7 +7,7 @@ import json
 import pickle
 
 import boto3
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -41,13 +41,15 @@ def invoke_lambda(payload):
         raise Exception('There is an error in lambda instance {}. The details are as follows:\n {}'.format(payload['index'], result))
 
 def parallel_lambda(payloads):
-    # with concurrent.futures.ThreadPoolExecutor() as executor:
-    #     results = list(executor.map(invoke_lambda, payloads))
     futures = []
     for payload in payloads:
         future = lambda_pool.submit(invoke_lambda, payload)
         futures.append(future)
-    results = [future.result() for future in as_completed(futures)]
+    
+    results = []
+    for future in as_completed(futures):
+        results.append(future.result())
+    # results = [future.result() for future in as_completed(futures)]
     results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
     return results_sorted
 
