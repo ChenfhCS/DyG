@@ -32,7 +32,11 @@ def invoke_lambda(payload):
         Payload=json.dumps(payload),
     )
     result = json.loads(response['Payload'].read().decode('utf-8'))
-    return result
+    if result['out'] == 'complete':
+        out = torch.load('/home/ubuntu/mnt/efs/outputs/structural_out_{}.pt'.format(payload['index']))
+        return out
+    else:
+        raise Exception('There is an error in lambda instance {}. The details are as follows:\n {}'.format(payload['index'], result))
 
 def parallel_lambda(payloads):
     # with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -42,6 +46,7 @@ def parallel_lambda(payloads):
         future = lambda_pool.submit(invoke_lambda, payload)
         futures.append(future)
     results = [future.result() for future in as_completed(futures)]
+
     return results
 
 def _tensor_distance(tensor_A, tensor_B):
@@ -202,11 +207,8 @@ class DySAT(nn.Module):
 
         time_start = time.time()
         results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
-        try:
-            structural_outputs = [torch.tensor(g['out'], dtype=torch.float32)[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
-            print('time to reshape outputs from lambda instances: ', time.time() - time_start)
-        except KeyError:
-            print(results_sorted[-1])
+        structural_outputs = [torch.tensor(g, dtype=torch.float32)[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
+        print('time to reshape outputs from lambda instances: ', time.time() - time_start)
 
 
         # padding outputs along with Ni
