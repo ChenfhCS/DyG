@@ -210,7 +210,7 @@ class DySAT(nn.Module):
         print('time to launch lambda instances: ', time.time() - time_start)
 
         for result in results:
-            print('output tensor shape: ', result.size)
+            print('output tensor shape: ', result.size())
         time_start = time.time()
         results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
         structural_outputs = [g[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
