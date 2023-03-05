@@ -26,13 +26,18 @@ LAMBDA_POOL_SIZE = 30
 lambda_pool = ThreadPoolExecutor(max_workers = LAMBDA_POOL_SIZE)
 
 def invoke_lambda(payload):
+    time_start = time.time()
     response =  lambda_client.invoke(
         FunctionName='layer_forward',
         InvocationType='RequestResponse', # 同步调用
         Payload=json.dumps(payload),
     )
     result = json.loads(response['Payload'].read().decode('utf-8'))
-
+    time_end = time.time()
+    print('Lambda invocation {} start at {}, ends at {}, total time costs {}'.format(payload['index'], time.strftime('%H:%M:%S', time.localtime(time_start)), 
+                                                                                    time.strftime('%H:%M:%S', time.localtime(time_end)), time_end - time_start))
+    
+    # time_start = time.time()
     try:
         if  result['info'] == 'complete':
             out = torch.load('/home/ubuntu/mnt/efs/outputs/structural_out_{}.pt'.format(payload['index']))
@@ -194,9 +199,7 @@ class DySAT(nn.Module):
                 'index': i
             }
             payloads.append(payload)
-        time_start = time.time()
         results = parallel_lambda(payloads)
-        print('time to launch lambda instances: ', time.time() - time_start)
 
         structural_outputs = [g[:,None,:] for g in results] # list of [Ni, 1, F]
 
