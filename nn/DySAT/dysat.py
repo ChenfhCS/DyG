@@ -186,12 +186,14 @@ class DySAT(nn.Module):
         print('time to save layer parameters: ', time.time() - time_start)
         time_start = time.time()
         for i, graph in enumerate(graphs):
-            graph_x_path = '/home/ubuntu/mnt/efs/graphs/graph_x_{}.pkl'.format(i)
-            graph_edge_path = '/home/ubuntu/mnt/efs/graphs/graph_edge_{}.pkl'.format(i)
-            with open(graph_x_path, 'wb') as f:
-                pickle.dump(graph.x, f)
-            with open(graph_edge_path, 'wb') as f:
-                pickle.dump(graph.edge_index, f)
+            graph_x_path = '/home/ubuntu/mnt/efs/graphs/graph_x_{}.pt'.format(i)
+            graph_edge_path = '/home/ubuntu/mnt/efs/graphs/graph_edge_{}.pt'.format(i)
+            torch.save(graph.x, graph_x_path)
+            torch.save(graph.edge_index, graph_edge_path)
+            # with open(graph_x_path, 'wb') as f:
+            #     pickle.dump(graph.x, f)
+            # with open(graph_edge_path, 'wb') as f:
+            #     pickle.dump(graph.edge_index, f)
             payload = {
                 'flag': 'structural',
                 'layer_addr': '/mnt/efs/layers/layer.pt',
@@ -205,9 +207,11 @@ class DySAT(nn.Module):
         results = parallel_lambda(payloads)
         print('time to launch lambda instances: ', time.time() - time_start)
 
+        for result in results:
+            print('output tensor shape: ', result.size)
         time_start = time.time()
         results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
-        structural_outputs = [torch.tensor(g, dtype=torch.float32)[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
+        structural_outputs = [g[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
         print('time to reshape outputs from lambda instances: ', time.time() - time_start)
 
 
