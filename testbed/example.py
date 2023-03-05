@@ -28,12 +28,6 @@ import json
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 
 def _warmup_lambda(lambda_client, function_name, num_warmup_invocations):
-    lambda_client.put_provisioned_concurrency_config(
-        FunctionName = function_name,
-        ProvisionedConcurrentExecutions = num_warmup_invocations,
-        Qualifier = 'PROD',
-    )
-
     for i in range(num_warmup_invocations):
         response = lambda_client.invoke(
             FunctionName=function_name,
