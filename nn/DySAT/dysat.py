@@ -35,8 +35,6 @@ def invoke_lambda(payload):
     )
     result = json.loads(response['Payload'].read().decode('utf-8'))
     time_end = time.time()
-    print('Lambda invocation {} start at {}, ends at {}, total time costs {}'.format(payload['index'], datetime.datetime.fromtimestamp(time_start).strftime('%Y-%m-%d %H:%M:%S.%f'), 
-                                                                                    datetime.datetime.fromtimestamp(time_end).strftime('%Y-%m-%d %H:%M:%S.%f'), time_end - time_start))
     
     # time_start = time.time()
     try:
@@ -44,8 +42,11 @@ def invoke_lambda(payload):
             out = torch.load('/home/ubuntu/mnt/efs/outputs/structural_out_{}.pt'.format(payload['index']))
             return {
                 'index': result['index'],
-                'out': out
+                'out': out,
             }
+        print('Lambda invocation {} start at {}, ends at {}, total time costs {}, exe_point {}'.format(payload['index'], datetime.datetime.fromtimestamp(time_start).strftime('%Y-%m-%d %H:%M:%S.%f'), 
+                                                                                    datetime.datetime.fromtimestamp(time_end).strftime('%Y-%m-%d %H:%M:%S.%f'), time_end - time_start,
+                                                                                    datetime.datetime.fromtimestamp(result['exe_time']).strftime('%Y-%m-%d %H:%M:%S.%f')))
     except KeyError:
         raise Exception('There is an error in lambda instance {}. The details are as follows:\n {}'.format(payload['index'], result))
 
