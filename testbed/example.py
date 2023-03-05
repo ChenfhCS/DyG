@@ -142,7 +142,9 @@ def run_example(args, logger):
         model.train()
         loss = 0
         samples = [snapshot.train_samples for snapshot in snapshots]
+        time_start = time.time()
         structural_outputs, temporal_outputs, outputs = model(snapshots, samples)
+        print('time to model forward: ', time.time() - time_start)
         gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
 
         for t, snapshot in enumerate(snapshots):
