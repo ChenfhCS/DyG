@@ -26,7 +26,7 @@ LAMBDA_POOL_SIZE = 10
 lambda_pool = ThreadPoolExecutor(max_workers = LAMBDA_POOL_SIZE)
 
 def invoke_lambda(payload):
-    response = lambda_client.invoke(
+    return lambda_client.invoke(
         FunctionName='layer_forward',
         InvocationType='RequestResponse', # 同步调用
         Payload=json.dumps(payload),
