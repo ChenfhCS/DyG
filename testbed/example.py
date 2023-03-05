@@ -23,6 +23,25 @@ from simulation.communication_sim import Simulator
 # from simulation.Simulator_new import Diana
 from MLDP import Partition_DyG, node_partition_balance
 
+import boto3
+import json
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
+
+def _warmup_lambda(lambda_client, function_name, num_warmup_invocations):
+    lambda_client.put_provisioned_concurrency_config(
+        FunctionName = function_name,
+        ProvisionedConcurrentExecutions = num_warmup_invocations,
+        Qualifier = 'PROD',
+        TimeoutInSeconds = 900,
+    )
+
+    for i in range(num_warmup_invocations):
+        response = lambda_client.invoke(
+            FunctionName=function_name,
+            InvocationType='RequestResponse',
+            Payload=json.dumps({'warmup': True})
+        )
+
 class My_Model(torch.nn.Module):
     def __init__(self, args, node_features):
         super(My_Model, self).__init__()
@@ -136,7 +155,13 @@ def run_example(args, logger):
             graph_edge_path = '/home/ubuntu/mnt/efs/graphs/graph_edge_{}.pt'.format(i)
             torch.save(graph.x, graph_x_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
             torch.save(graph.edge_index, graph_edge_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
-
+    
+    # warm-up lambda instances
+    lambda_client = boto3.client('lambda')
+    function_name = 'layer_forward'
+    pool_size = 30
+    _warmup_lambda(lambda_client, function_name, pool_size)
+    
     time_start = time.time()
     for epoch in range(args['epochs']):
         model.train()
