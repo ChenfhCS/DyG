@@ -48,8 +48,8 @@ def parallel_lambda(payloads):
         future = lambda_pool.submit(invoke_lambda, payload)
         futures.append(future)
     results = [future.result() for future in as_completed(futures)]
-
-    return results
+    results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
+    return results_sorted
 
 def _tensor_distance(tensor_A, tensor_B):
     sub_c = torch.sub(tensor_A, tensor_B)
@@ -210,8 +210,7 @@ class DySAT(nn.Module):
         print('time to launch lambda instances: ', time.time() - time_start)
 
         time_start = time.time()
-        results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
-        structural_outputs = [g[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
+        structural_outputs = [g[:,None,:] for g in results] # list of [Ni, 1, F]
         print('time to reshape outputs from lambda instances: ', time.time() - time_start)
 
         for result in structural_outputs:
