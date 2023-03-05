@@ -32,10 +32,12 @@ def invoke_lambda(payload):
         Payload=json.dumps(payload),
     )
     result = json.loads(response['Payload'].read().decode('utf-8'))
-    if result['out'] == 'complete':
-        out = torch.load('/home/ubuntu/mnt/efs/outputs/structural_out_{}.pt'.format(payload['index']))
-        return out
-    else:
+
+    try:
+        if  result['out'] == 'complete':
+            out = torch.load('/home/ubuntu/mnt/efs/outputs/structural_out_{}.pt'.format(payload['index']))
+            return out
+    except KeyError:
         raise Exception('There is an error in lambda instance {}. The details are as follows:\n {}'.format(payload['index'], result))
 
 def parallel_lambda(payloads):
@@ -188,8 +190,8 @@ class DySAT(nn.Module):
         for i, graph in enumerate(graphs):
             graph_x_path = '/home/ubuntu/mnt/efs/graphs/graph_x_{}.pt'.format(i)
             graph_edge_path = '/home/ubuntu/mnt/efs/graphs/graph_edge_{}.pt'.format(i)
-            torch.save(graph.x, graph_x_path)
-            torch.save(graph.edge_index, graph_edge_path)
+            torch.save(graph.x, graph_x_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
+            torch.save(graph.edge_index, graph_edge_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
             # with open(graph_x_path, 'wb') as f:
             #     pickle.dump(graph.x, f)
             # with open(graph_edge_path, 'wb') as f:
@@ -197,8 +199,8 @@ class DySAT(nn.Module):
             payload = {
                 'flag': 'structural',
                 'layer_addr': '/mnt/efs/layers/layer.pt',
-                'graph_x_addr': '/mnt/efs/graphs/graph_x_{}.pkl'.format(i),
-                'graph_edge_addr': '/mnt/efs/graphs/graph_edge_{}.pkl'.format(i),
+                'graph_x_addr': '/mnt/efs/graphs/graph_x_{}.pt'.format(i),
+                'graph_edge_addr': '/mnt/efs/graphs/graph_edge_{}.pt'.format(i),
                 'index': i
             }
             payloads.append(payload)
