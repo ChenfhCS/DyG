@@ -31,9 +31,9 @@ class My_Model(torch.nn.Module):
         self.classifier = classifier(in_feature = 16)
 
     def forward(self, snapshots, samples):
-        if self.args['device'] == 'cpu' or 'gpu':
+        if self.args['testbed'] == 'cpu' or 'gpu':
             str_emb, final_emb = self.dgnn.forward(snapshots)
-        elif self.args['device'] == 'lambda':
+        elif self.args['testbed'] == 'lambda':
             str_emb, final_emb = self.dgnn.forward_lambda(snapshots)
         else:
             raise Exception('There is no such an device type to support!')
@@ -65,8 +65,8 @@ def _get_args():
                     help="experiment type")
     parser.add_argument('--world_size', type=int, default=2,
                         help='method for DGNN training')
-    parser.add_argument('--device', type=str, default='cpu',
-                        help='training device')
+    parser.add_argument('--testbed', type=str, default='cpu',
+                        help='training testbed')
     args = vars(parser.parse_args())
     return args
 
@@ -103,9 +103,9 @@ def run_example(args, logger):
 
     args['rank'] = 0
     args['stale'] = False
-    if args['device'] == 'cpu' or 'lambda':
+    if args['testbed'] == 'cpu' or 'lambda':
         args['device'] = torch.device("cpu")
-    elif args['device'] == 'gpu':
+    elif args['testbed'] == 'gpu':
         args['device'] = torch.device("cuda")
 
     if args['dataset'] == 'Epinion':
