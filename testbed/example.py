@@ -32,8 +32,10 @@ class My_Model(torch.nn.Module):
 
     def forward(self, snapshots, samples):
         if self.args['testbed'] == 'cpu' or 'gpu':
+            print('without lambda')
             str_emb, final_emb = self.dgnn.forward(snapshots)
         elif self.args['testbed'] == 'lambda':
+            print('with lambda')
             str_emb, final_emb = self.dgnn.forward_lambda(snapshots)
         else:
             raise Exception('There is no such an device type to support!')
