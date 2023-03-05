@@ -34,9 +34,12 @@ def invoke_lambda(payload):
     result = json.loads(response['Payload'].read().decode('utf-8'))
 
     try:
-        if  result['out'] == 'complete':
+        if  result['info'] == 'complete':
             out = torch.load('/home/ubuntu/mnt/efs/outputs/structural_out_{}.pt'.format(payload['index']))
-            return out
+            return {
+                'index': result['index'],
+                'out': out
+            }
     except KeyError:
         raise Exception('There is an error in lambda instance {}. The details are as follows:\n {}'.format(payload['index'], result))
 
@@ -47,8 +50,7 @@ def parallel_lambda(payloads):
         futures.append(future)
     
     results = [future.result() for future in as_completed(futures)]
-    results_sorted = sorted(zip([p['index'] for p in payloads], results), key=lambda x: x[0])
-    return [r for _, r in results_sorted]
+    return [r for _, r in sorted(zip([res['index'] for res in results], [res['out'] for res in results]))]
 
 def _tensor_distance(tensor_A, tensor_B):
     sub_c = torch.sub(tensor_A, tensor_B)
