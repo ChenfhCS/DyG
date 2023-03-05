@@ -219,10 +219,10 @@ class DySAT(nn.Module):
 
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
-        print('maximum nodes: ', maximum_node_num)
         out_dim = structural_outputs[-1].shape[-1]
         structural_outputs_padded = []
         for out in structural_outputs:
+            print('max_nodes: {}, out_size: {}'.format(maximum_node_num, out.shape[0]))
             zero_padding = torch.zeros(maximum_node_num-out.shape[0], 1, out_dim).to(out.device)
             padded = torch.cat((out, zero_padding), dim=0)
             structural_outputs_padded.append(padded)
