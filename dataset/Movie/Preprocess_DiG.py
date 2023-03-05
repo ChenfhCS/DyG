@@ -129,7 +129,16 @@ for slice_id in slices_links:
 # TODO : remap and output.
 from scipy.sparse import csr_matrix
 
-def remap(slices_graph, slices_features):
+def remap(slices_graphs, slices_features):
+    snapshots = []
+    slices_features_remap = []
+    for slices_id in slices_graphs:
+        slices_graph = slices_graphs[slices_id]
+        node_mapping = {n: i for i, n in enumerate(slices_graph.nodes())}
+        slices_graph_remap = nx.relabel_nodes(slices_graph, node_mapping, copy=True)
+        snapshots.append(slices_graph_remap)
+    return snapshots, slices_features_remap
+
     all_nodes = []
     for slice_id in slices_graph:
         # assert len(slices_graph[slice_id].nodes()) == len(slices_features[slice_id])
@@ -208,17 +217,17 @@ slices_links_remap, slices_features_remap = remap(slices_links, slices_features)
 # slices_links_remap, slices_features_remap = remap(slices_links, slices_features)
 # slices_links_remap = slices_links
 
-Links=[]
-Nodes = []
-Differences = []
-for i in range (len(slices_links_remap)):
-    Nodes.append(len(slices_links_remap[i].nodes()))
-    Links.append(len(slices_links_remap[i].edges()))
-    # temp = []
-    # for j in range (len(slices_links_remap)):
-    #     temp.append(comparison(slices_links[i], slices_links[j], all_nodes))
-    # Differences.append(temp)
-print(Links,Nodes)
+# Links=[]
+# Nodes = []
+# Differences = []
+# for i in range (len(slices_links_remap)):
+#     Nodes.append(len(slices_links_remap[i].nodes()))
+#     Links.append(len(slices_links_remap[i].edges()))
+#     # temp = []
+#     # for j in range (len(slices_links_remap)):
+#     #     temp.append(comparison(slices_links[i], slices_links[j], all_nodes))
+#     # Differences.append(temp)
+# print(Links,Nodes)
 
 np.savez(save_graph_path, graph=slices_links_remap)  # graph为字典的key
 # np.savez(save_features_path, feats=slices_features_remap)
