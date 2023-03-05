@@ -214,17 +214,11 @@ class DySAT(nn.Module):
         structural_outputs = [g[:,None,:] for g in results] # list of [Ni, 1, F]
         print('time to reshape outputs from lambda instances: ', time.time() - time_start)
 
-        for result in structural_outputs:
-            print('output tensor shape: ', result.size())
-
-        for graph in graphs:
-            print('graph has nodes: ', graph.x.size(0))
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
         out_dim = structural_outputs[-1].shape[-1]
         structural_outputs_padded = []
         for out in structural_outputs:
-            print('max_nodes: {}, out_size: {}'.format(maximum_node_num, out.shape[0]))
             zero_padding = torch.zeros(maximum_node_num-out.shape[0], 1, out_dim).to(out.device)
             padded = torch.cat((out, zero_padding), dim=0)
             structural_outputs_padded.append(padded)

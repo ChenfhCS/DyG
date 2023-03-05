@@ -31,10 +31,7 @@ class My_Model(torch.nn.Module):
         self.classifier = classifier(in_feature = 16)
 
     def forward(self, snapshots, samples):
-        print('testbed: ',self.args['testbed'])
-        if self.args['testbed'] == 'cpu':
-            str_emb, final_emb = self.dgnn.forward(snapshots)
-        elif self.args['testbed'] == 'gpu':
+        if self.args['testbed'] == 'cpu' or self.args['testbed'] == 'gpu':
             str_emb, final_emb = self.dgnn.forward(snapshots)
         elif self.args['testbed'] == 'lambda':
             str_emb, final_emb = self.dgnn.forward_lambda(snapshots)
