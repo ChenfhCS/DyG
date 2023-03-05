@@ -126,9 +126,11 @@ class DySAT(nn.Module):
 
     def forward(self, graphs, gate = None, distribute = None):
         structural_out = []
+        time_start = time.time()
         for t in range(0, self.num_time_steps):
             # graphs[t] = graphs[t].to(self.device)
             structural_out.append(self.structural_attn(graphs[t]))
+        print('time to compute structural outputs: ', time.time() - time_start)
         structural_outputs = [g[:,None,:] for g in structural_out] # list of [Ni, 1, F]
 
         # padding outputs along with Ni
@@ -200,7 +202,9 @@ class DySAT(nn.Module):
                 'index': i
             }
             payloads.append(payload)
+        time_start = time.time()
         results = parallel_lambda(payloads)
+        print('time to compute structural outputs: ', time.time() - time_start)
 
         structural_outputs = [g[:,None,:] for g in results] # list of [Ni, 1, F]
 
