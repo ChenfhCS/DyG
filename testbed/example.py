@@ -101,14 +101,13 @@ def _save_log(args, loss_log, acc_log):
 
 def run_example(args, logger):
     # print hyper-parameters
-    print(args)
     args['rank'] = 0
     args['stale'] = False
     if args['testbed'] == 'cpu' or 'lambda':
         args['device'] = torch.device("cpu")
     elif args['testbed'] == 'gpu':
         args['device'] = torch.device("cuda")
-
+    print(args)
     if args['dataset'] == 'Epinion':
         loader = EpinionDatasetLoader(timesteps = args['timesteps'])
     elif args['dataset'] == 'Amazon':
