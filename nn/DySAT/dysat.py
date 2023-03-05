@@ -188,11 +188,7 @@ class DySAT(nn.Module):
         torch.save(self.structural_attn.state_dict(), layer_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
         print('time to save layer parameters: ', time.time() - time_start)
         time_start = time.time()
-        for i, graph in enumerate(graphs):
-            graph_x_path = '/home/ubuntu/mnt/efs/graphs/graph_x_{}.pt'.format(i)
-            graph_edge_path = '/home/ubuntu/mnt/efs/graphs/graph_edge_{}.pt'.format(i)
-            torch.save(graph.x, graph_x_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
-            torch.save(graph.edge_index, graph_edge_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
+        for i in range(len(graphs)):
             # with open(graph_x_path, 'wb') as f:
             #     pickle.dump(graph.x, f)
             # with open(graph_edge_path, 'wb') as f:

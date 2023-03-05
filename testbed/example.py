@@ -129,6 +129,14 @@ def run_example(args, logger):
     loss_log = []
     best_acc = 0
 
+    # write graph data to efs for lambda processing
+    if args['testbed'] == 'lambda':
+        for i, graph in enumerate(snapshots):
+            graph_x_path = '/home/ubuntu/mnt/efs/graphs/graph_x_{}.pt'.format(i)
+            graph_edge_path = '/home/ubuntu/mnt/efs/graphs/graph_edge_{}.pt'.format(i)
+            torch.save(graph.x, graph_x_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
+            torch.save(graph.edge_index, graph_edge_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
+
     time_start = time.time()
     for epoch in range(args['epochs']):
         model.train()
