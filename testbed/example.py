@@ -32,6 +32,10 @@ class My_Model(torch.nn.Module):
 
     def forward(self, snapshots, samples):
         print('testbed: ',self.args['testbed'])
+        if self.args['testbed'] == 'lambda':
+            print('True')
+        else:
+            print('False')
         if self.args['testbed'] == 'cpu' or 'gpu':
             str_emb, final_emb = self.dgnn.forward(snapshots)
         elif self.args['testbed'] == 'lambda':
