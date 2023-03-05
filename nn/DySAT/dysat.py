@@ -7,7 +7,7 @@ import json
 import pickle
 
 import boto3
-import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -21,6 +21,10 @@ from .layers import ATT_layer as TemporalAttentionLayer
 # from utils import *
 
 lambda_client = boto3.client('lambda')
+LAMBDA_FUNCTION_NAME = 'layer_forward'
+LAMBDA_POOL_SIZE = 10
+lambda_pool = ThreadPoolExecutor(max_workers = LAMBDA_POOL_SIZE)
+
 def invoke_lambda(payload):
     response = lambda_client.invoke(
         FunctionName='layer_forward',
@@ -31,8 +35,13 @@ def invoke_lambda(payload):
     return result
 
 def parallel_lambda(payloads):
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        results = list(executor.map(invoke_lambda, payloads))
+    # with concurrent.futures.ThreadPoolExecutor() as executor:
+    #     results = list(executor.map(invoke_lambda, payloads))
+    futures = []
+    for payload in payloads:
+        future = lambda_pool.submit(invoke_lambda, payload)
+        futures.append(future)
+    results = [future.result() for future in as_completed(futures)]
     return results
 
 def _tensor_distance(tensor_A, tensor_B):
