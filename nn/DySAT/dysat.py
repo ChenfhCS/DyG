@@ -202,8 +202,12 @@ class DySAT(nn.Module):
 
         time_start = time.time()
         results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
-        structural_outputs = [torch.tensor(g['out'], dtype=torch.float32)[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
-        print('time to reshape outputs from lambda instances: ', time.time() - time_start)
+        try:
+            structural_outputs = [torch.tensor(g['out'], dtype=torch.float32)[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
+            print('time to reshape outputs from lambda instances: ', time.time() - time_start)
+        except KeyError:
+            print(results_sorted[-1])
+
 
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
