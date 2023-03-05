@@ -59,29 +59,29 @@ def run_coarsening(args):
     model = LabelPropagator(graph_list, full_graph, args)
     model.do_a_series_of_propagations()
 
-import matplotlib.pyplot as plt
-def plot_graph(args,G, node_color, edge_color, pos, flag):
-    # node_color_mask = {}
-    # node_color_mask[0] = 'red'
-    # node_color_mask[1] = 'blue'
-    # node_color_mask[2] = 'yellow'
-    # node_color_mask[3] = 'purple'
-    # # print([full_graph.nodes[node]['snap_id'][0] for node in list(full_graph)])
-    # nodes_colors = [node_color_mask[G.nodes[node]['snap_id'][0]] for node in list(G)]
+# import matplotlib.pyplot as plt
+# def plot_graph(args,G, node_color, edge_color, pos, flag):
+#     # node_color_mask = {}
+#     # node_color_mask[0] = 'red'
+#     # node_color_mask[1] = 'blue'
+#     # node_color_mask[2] = 'yellow'
+#     # node_color_mask[3] = 'purple'
+#     # # print([full_graph.nodes[node]['snap_id'][0] for node in list(full_graph)])
+#     # nodes_colors = [node_color_mask[G.nodes[node]['snap_id'][0]] for node in list(G)]
     
-    # edge_color_mask = {}
-    # edge_color_mask['str'] = 'black'
-    # edge_color_mask['tem'] = 'green'
-    # edges_colors = [edge_color_mask[G.edges[edge]['type']] for edge in G.edges()]
+#     # edge_color_mask = {}
+#     # edge_color_mask['str'] = 'black'
+#     # edge_color_mask['tem'] = 'green'
+#     # edges_colors = [edge_color_mask[G.edges[edge]['type']] for edge in G.edges()]
 
-    fig, ax = plt.subplots()
-    nx.draw(G, ax=ax, node_size=5, 
-	        width=0.5,
-            pos=pos,
-            node_color=node_color,
-            edge_color=edge_color)
-    plt.savefig('./experiment_results/{}_graph_{}.png'.format(flag, args['dataset']))
-    plt.close()
+#     fig, ax = plt.subplots()
+#     nx.draw(G, ax=ax, node_size=5, 
+# 	        width=0.5,
+#             pos=pos,
+#             node_color=node_color,
+#             edge_color=edge_color)
+#     plt.savefig('./experiment_results/{}_graph_{}.png'.format(flag, args['dataset']))
+#     plt.close()
 
 def coarsener(args, graph_list, full_graph):
     # plot_graph(full_graph, args)
