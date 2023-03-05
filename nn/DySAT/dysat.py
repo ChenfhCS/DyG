@@ -217,6 +217,8 @@ class DySAT(nn.Module):
         for result in structural_outputs:
             print('output tensor shape: ', result.size())
 
+        for graph in graphs:
+            print('graph has nodes: ', graph.x.size(0))
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
         out_dim = structural_outputs[-1].shape[-1]
