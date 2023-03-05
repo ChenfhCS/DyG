@@ -34,8 +34,8 @@ def invoke_lambda(payload):
     )
     result = json.loads(response['Payload'].read().decode('utf-8'))
     time_end = time.time()
-    print('Lambda invocation {} start at {}, ends at {}, total time costs {}'.format(payload['index'], time.strftime('%H:%M:%S', time.localtime(time_start)), 
-                                                                                    time.strftime('%H:%M:%S', time.localtime(time_end)), time_end - time_start))
+    print('Lambda invocation {} start at {}, ends at {}, total time costs {}'.format(payload['index'], time.strftime('%H:%M:%S.%f', time.localtime(time_start)), 
+                                                                                    time.strftime('%H:%M:%S.%f', time.localtime(time_end)), time_end - time_start))
     
     # time_start = time.time()
     try:
