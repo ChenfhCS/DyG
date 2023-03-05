@@ -209,16 +209,17 @@ class DySAT(nn.Module):
         results = parallel_lambda(payloads)
         print('time to launch lambda instances: ', time.time() - time_start)
 
-        for result in results:
-            print('output tensor shape: ', result.size())
         time_start = time.time()
         results_sorted = [r for _, r in sorted(zip([p['index'] for p in payloads], results))]
         structural_outputs = [g[:,None,:] for g in results_sorted] # list of [Ni, 1, F]
         print('time to reshape outputs from lambda instances: ', time.time() - time_start)
 
+        for result in structural_outputs:
+            print('output tensor shape: ', result.size())
 
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
+        print('maximum nodes: ', maximum_node_num)
         out_dim = structural_outputs[-1].shape[-1]
         structural_outputs_padded = []
         for out in structural_outputs:
