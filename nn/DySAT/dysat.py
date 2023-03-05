@@ -201,7 +201,7 @@ class DySAT(nn.Module):
                 'index': i
             }
             payloads.append(payload)
-        print('time to save graph data: ', time.time() - time_start)
+        print('time to write payloads: ', time.time() - time_start)
         time_start = time.time()
         results = parallel_lambda(payloads)
         print('time to launch lambda instances: ', time.time() - time_start)
