@@ -149,11 +149,11 @@ def run_example(args, logger):
             torch.save(graph.x, graph_x_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
             torch.save(graph.edge_index, graph_edge_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
     
-    # warm-up lambda instances
-    lambda_client = boto3.client('lambda')
-    function_name = 'layer_forward'
-    pool_size = 30
-    _warmup_lambda(lambda_client, function_name, pool_size)
+    # # warm-up lambda instances
+    # lambda_client = boto3.client('lambda')
+    # function_name = 'layer_forward'
+    # pool_size = 30
+    # _warmup_lambda(lambda_client, function_name, pool_size)
 
     time_start = time.time()
     for epoch in range(args['epochs']):

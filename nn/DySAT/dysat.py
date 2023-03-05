@@ -183,16 +183,9 @@ class DySAT(nn.Module):
     def forward_lambda(self, graphs, gate = None, distribute = None):
         # 打包每个graph为payload，同时指定flag和layer参数
         payloads = []
-        time_start = time.time()
         layer_path = '/home/ubuntu/mnt/efs/layers/layer.pt'
         torch.save(self.structural_attn.state_dict(), layer_path, pickle_protocol=2, _use_new_zipfile_serialization=False)
-        print('time to save layer parameters: ', time.time() - time_start)
-        time_start = time.time()
         for i in range(len(graphs)):
-            # with open(graph_x_path, 'wb') as f:
-            #     pickle.dump(graph.x, f)
-            # with open(graph_edge_path, 'wb') as f:
-            #     pickle.dump(graph.edge_index, f)
             payload = {
                 'flag': 'structural',
                 'layer_addr': '/mnt/efs/layers/layer.pt',
@@ -206,9 +199,7 @@ class DySAT(nn.Module):
         results = parallel_lambda(payloads)
         print('time to launch lambda instances: ', time.time() - time_start)
 
-        time_start = time.time()
         structural_outputs = [g[:,None,:] for g in results] # list of [Ni, 1, F]
-        print('time to reshape outputs from lambda instances: ', time.time() - time_start)
 
         # padding outputs along with Ni
         maximum_node_num = structural_outputs[-1].shape[0]
