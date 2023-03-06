@@ -162,12 +162,9 @@ def run_example(args, logger):
         model.train()
         loss = 0
         samples = [snapshot.train_samples for snapshot in snapshots]
-        time_start = time.time()
         _, _, outputs = model(snapshots, samples)
-        print('time to model forward: ', time.time() - time_start)
         gpu_mem_alloc = torch.cuda.max_memory_allocated() / 1000000 if torch.cuda.is_available() else 0
 
-        time_start = time.time()
         for t, snapshot in enumerate(snapshots):
             y = outputs[t]
             label = snapshot.train_labels
@@ -179,10 +176,7 @@ def run_example(args, logger):
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-        print('time to model backward: ', time.time() - time_start)
-        # print('epoch: {} loss: {}'.format(epoch, loss.item()))
 
-        time_start = time.time()
         with torch.no_grad():
             model.eval()
             ACC = 0
@@ -199,7 +193,6 @@ def run_example(args, logger):
             acc_log.append(acc)
             if best_acc <= acc:
                 best_acc = acc
-        print('time to model inference: ', time.time() - time_start)
         print('epoch: {} loss: {:.4f} acc: {:.4f} GPU memory {:.3f}'.format(epoch, loss.item(), acc, gpu_mem_alloc))
 
         time_end = time.time()
