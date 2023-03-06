@@ -123,96 +123,105 @@ for slice_id in slices_links:
 # TODO : remap and output.
 from scipy.sparse import csr_matrix
 
-def remap(slices_graph, slices_features):
-    all_nodes = []
-    for slice_id in slices_graph:
-        # assert len(slices_graph[slice_id].nodes()) == len(slices_features[slice_id])
-        all_nodes.extend(slices_graph[slice_id].nodes())
-    all_nodes = list(set(all_nodes))
-    print ("Total # nodes", len(all_nodes), "max idx", max(all_nodes))
-    ctr = 0
-    node_idx = {}
-    idx_node = []
-    for slice_id in slices_graph:
-        for node in slices_graph[slice_id].nodes():
-            if node not in node_idx:
-                node_idx[node] = ctr
-                idx_node.append(node)
-                ctr += 1
-    print('Get all nodes list complete!')
-
-    # generate snapshots list
-    slices_graph_remap = []
+def remap(slices_graphs, slices_features):
+    snapshots = []
     slices_features_remap = []
-    for (id, slice_id) in enumerate(slices_graph):
-        G = nx.DiGraph()
-        if id > 0:
-            # print('G nodes:', slices_graph_remap[id - 1].nodes())
-            # print('slice nodes:', slices_graph[id - 1].nodes())
-            # print(len(slices_graph_remap[id - 1].nodes()))
-            for x in slices_graph_remap[-1].nodes():
-                G.add_node(x)
-        for x in slices_graph[slice_id].nodes():
-            if node_idx[x] not in G.nodes():
-                G.add_node(node_idx[x])
-        for x in slices_graph[slice_id].edges(data=True):
-            G.add_edge(node_idx[x[0]], node_idx[x[1]], date=x[2]['date'])
-        # assert (len(G.nodes()) == len(slices_graph[slice_id].nodes()))
-        assert (len(G.edges()) == len(slices_graph[slice_id].edges()))
-        slices_graph_remap.append(G)
-    print('generate snapshots list complete!')
+    for slices_id in slices_graphs:
+        slices_graph = slices_graphs[slices_id]
+        node_mapping = {n: i for i, n in enumerate(slices_graph.nodes())}
+        slices_graph_remap = nx.relabel_nodes(slices_graph, node_mapping, copy=True)
+        snapshots.append(slices_graph_remap)
+    return snapshots, slices_features_remap
 
-    # # generate feature list
-    # for slice_id in slices_features:
-    #     features_remap = []
-    #     for x in slices_graph_remap[slice_id].nodes():
-    #         features_remap.append(slices_features[slice_id][idx_node[x]])
-    #         #features_remap.append(np.array(slices_features[slice_id][idx_node[x]]).flatten())
-    #     features_remap = csr_matrix(np.squeeze(np.array(features_remap)))
-    #     slices_features_remap.append(features_remap)
-    # print('generate feature list complete!')
-    return (slices_graph_remap, slices_features_remap)
+#     all_nodes = []
+#     for slice_id in slices_graph:
+#         # assert len(slices_graph[slice_id].nodes()) == len(slices_features[slice_id])
+#         all_nodes.extend(slices_graph[slice_id].nodes())
+#     all_nodes = list(set(all_nodes))
+#     print ("Total # nodes", len(all_nodes), "max idx", max(all_nodes))
+#     ctr = 0
+#     node_idx = {}
+#     idx_node = []
+#     for slice_id in slices_graph:
+#         for node in slices_graph[slice_id].nodes():
+#             if node not in node_idx:
+#                 node_idx[node] = ctr
+#                 idx_node.append(node)
+#                 ctr += 1
+#     print('Get all nodes list complete!')
+
+#     # generate snapshots list
+#     slices_graph_remap = []
+#     slices_features_remap = []
+#     for (id, slice_id) in enumerate(slices_graph):
+#         G = nx.DiGraph()
+#         if id > 0:
+#             # print('G nodes:', slices_graph_remap[id - 1].nodes())
+#             # print('slice nodes:', slices_graph[id - 1].nodes())
+#             # print(len(slices_graph_remap[id - 1].nodes()))
+#             for x in slices_graph_remap[-1].nodes():
+#                 G.add_node(x)
+#         for x in slices_graph[slice_id].nodes():
+#             if node_idx[x] not in G.nodes():
+#                 G.add_node(node_idx[x])
+#         for x in slices_graph[slice_id].edges(data=True):
+#             G.add_edge(node_idx[x[0]], node_idx[x[1]], date=x[2]['date'])
+#         # assert (len(G.nodes()) == len(slices_graph[slice_id].nodes()))
+#         assert (len(G.edges()) == len(slices_graph[slice_id].edges()))
+#         slices_graph_remap.append(G)
+#     print('generate snapshots list complete!')
+
+#     # # generate feature list
+#     # for slice_id in slices_features:
+#     #     features_remap = []
+#     #     for x in slices_graph_remap[slice_id].nodes():
+#     #         features_remap.append(slices_features[slice_id][idx_node[x]])
+#     #         #features_remap.append(np.array(slices_features[slice_id][idx_node[x]]).flatten())
+#     #     features_remap = csr_matrix(np.squeeze(np.array(features_remap)))
+#     #     slices_features_remap.append(features_remap)
+#     # print('generate feature list complete!')
+#     return (slices_graph_remap, slices_features_remap)
 
 
-# compute the differences between two snapshots
-def comparison(snapshot_A, snapshot_B, all_nodes):
-    A = nx.DiGraph()
-    B = nx.DiGraph()
+# # compute the differences between two snapshots
+# def comparison(snapshot_A, snapshot_B, all_nodes):
+#     A = nx.DiGraph()
+#     B = nx.DiGraph()
 
-    A.add_nodes_from(all_nodes)
-    B.add_nodes_from(all_nodes)
+#     A.add_nodes_from(all_nodes)
+#     B.add_nodes_from(all_nodes)
 
-    A.add_edges_from(snapshot_A.edges())
-    B.add_edges_from(snapshot_B.edges())
+#     A.add_edges_from(snapshot_A.edges())
+#     B.add_edges_from(snapshot_B.edges())
 
-    Dif = nx.symmetric_difference(A,B)
-    return len(Dif.edges())
+#     Dif = nx.symmetric_difference(A,B)
+#     return len(Dif.edges())
 
-def remap_new(slices_graphs, slices_features):
-    slices_links_remap = []
-    slices_features_remap = []
-    for slice_id in slices_graphs:
-        slices_links_remap.append(slices_graphs[slice_id])
+# def remap_new(slices_graphs, slices_features):
+#     slices_links_remap = []
+#     slices_features_remap = []
+#     for slice_id in slices_graphs:
+#         slices_links_remap.append(slices_graphs[slice_id])
 
-    # TODO: remap for features
+#     # TODO: remap for features
 
-    return slices_links_remap, slices_features_remap
+#     return slices_links_remap, slices_features_remap
 
 slices_links_remap, slices_features_remap = remap(slices_links, slices_features) # graphs dict to graphs list
-# slices_links_remap, slices_features_remap = remap(slices_links, slices_features)
-# slices_links_remap = slices_links
+# # slices_links_remap, slices_features_remap = remap(slices_links, slices_features)
+# # slices_links_remap = slices_links
 
-Links=[]
-Nodes = []
-Differences = []
-for i in range (len(slices_links_remap)):
-    Nodes.append(len(slices_links_remap[i].nodes()))
-    Links.append(len(slices_links_remap[i].edges()))
-    # temp = []
-    # for j in range (len(slices_links_remap)):
-    #     temp.append(comparison(slices_links[i], slices_links[j], all_nodes))
-    # Differences.append(temp)
-print(Links,Nodes)
+# Links=[]
+# Nodes = []
+# Differences = []
+# for i in range (len(slices_links_remap)):
+#     Nodes.append(len(slices_links_remap[i].nodes()))
+#     Links.append(len(slices_links_remap[i].edges()))
+#     # temp = []
+#     # for j in range (len(slices_links_remap)):
+#     #     temp.append(comparison(slices_links[i], slices_links[j], all_nodes))
+#     # Differences.append(temp)
+# print(Links,Nodes)
 
 np.savez(save_graph_path, graph=slices_links_remap)  # graph为字典的key
 # np.savez(save_features_path, feats=slices_features_remap)
