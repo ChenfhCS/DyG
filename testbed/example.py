@@ -513,7 +513,7 @@ if __name__ == '__main__':
         # logging.basicConfig(level=logging.INFO, format='%(message)s')
         logger = logging.getLogger('example')
         logger.info('----------------------------------------------------------')
-        experiments_datasets = ['Amazon']
+        experiments_datasets = ['Amazon', 'Epinion', 'Movie', 'Stack']
         for dataset in experiments_datasets:
             args['dataset'] = dataset
             run_example(args, logger)
