@@ -156,8 +156,9 @@ def run_example(args, logger):
         _warmup_lambda(lambda_client, function_name, pool_size)
         print('{} lambda invocations have been warmed up!'.format(pool_size))
 
-    time_start = time.time()
+    time_cost = []
     for epoch in range(args['epochs']):
+        time_start = time.time()
         model.train()
         loss = 0
         samples = [snapshot.train_samples for snapshot in snapshots]
@@ -200,9 +201,12 @@ def run_example(args, logger):
                 best_acc = acc
         print('time to model inference: ', time.time() - time_start)
         print('epoch: {} loss: {:.4f} acc: {:.4f} GPU memory {:.3f}'.format(epoch, loss.item(), acc, gpu_mem_alloc))
-    time_end = time.time()
-    print('best accuracy: {:.3f} | total cost {:.3f}'.format(best_acc, time_end - time_start))
-    logger.info('device: {} | {} | T: {} | accuracy: {:.3f} | time: {:.3f}'.format(args['device'], args['dataset'], args['timesteps'], best_acc, time_end - time_start))
+
+        time_end = time.time()
+        time_cost.append(time_end - time_start)
+    print('best accuracy: {:.3f} | total cost {:.3f}'.format(best_acc, np.sum(time_cost[3:])))
+    logger.info('device: {} | {} | T: {} | accuracy: {:.3f} | total time cost: {:.3f} | average epoch time: {:.3f}'.format(args['device'], args['dataset'], args['timesteps'], 
+                                                                            best_acc,  np.sum(time_cost[3:]), np.mean(time_cost[3:])))
 
 def run_experiment_stale_aggregation_comm(args):
     # print hyper-parameters
