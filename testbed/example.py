@@ -197,8 +197,8 @@ def run_example(args, logger):
 
         time_end = time.time()
         time_cost.append(time_end - time_start)
-    print('best accuracy: {:.3f} | total cost {:.3f}'.format(best_acc, np.sum(time_cost[3:])))
-    logger.info('device: {} | {} | T: {} | accuracy: {:.3f} | total time cost: {:.3f} | average epoch time: {:.3f}'.format(args['device'], args['dataset'], args['timesteps'], 
+    print('best accuracy: {:.3f} | total time: {:.3f} | average epoch time: {:.3f}'.format(best_acc, np.sum(time_cost[3:]), np.mean(time_cost[3:])))
+    logger.info('device: {} | {} | T: {} | accuracy: {:.3f} | total time: {:.3f} | average epoch time: {:.3f}'.format(args['device'], args['dataset'], args['timesteps'], 
                                                                             best_acc,  np.sum(time_cost[3:]), np.mean(time_cost[3:])))
 
 def run_experiment_stale_aggregation_comm(args):
