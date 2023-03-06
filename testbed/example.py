@@ -154,6 +154,7 @@ def run_example(args, logger):
     function_name = 'layer_forward'
     pool_size = 30
     _warmup_lambda(lambda_client, function_name, pool_size)
+    print('{} lambda invocations have been warmed up!')
 
     time_start = time.time()
     for epoch in range(args['epochs']):
