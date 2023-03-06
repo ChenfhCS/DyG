@@ -40,10 +40,10 @@ def invoke_lambda(payload):
     try:
         if  result['info'] == 'complete':
             out = torch.load('/home/ubuntu/mnt/efs/outputs/structural_out_{}.pt'.format(payload['index']))
-            # print('Lambda invocation {} start at {}, ends at {}, total time costs {}, exe_point {}'.format(payload['index'], 
-                                                                                    # datetime.datetime.fromtimestamp(time_start).strftime('%Y-%m-%d %H:%M:%S.%f'), 
-                                                                                    # datetime.datetime.fromtimestamp(time_end).strftime('%Y-%m-%d %H:%M:%S.%f'), time_end - time_start,
-                                                                                    # datetime.datetime.fromtimestamp(result['exe_time']).strftime('%Y-%m-%d %H:%M:%S.%f')))
+            print('Lambda invocation {} start at {}, ends at {}, total time costs {}, exe_point {}'.format(payload['index'], 
+                                                                                    datetime.datetime.fromtimestamp(time_start).strftime('%Y-%m-%d %H:%M:%S.%f'), 
+                                                                                    datetime.datetime.fromtimestamp(time_end).strftime('%Y-%m-%d %H:%M:%S.%f'), time_end - time_start,
+                                                                                    datetime.datetime.fromtimestamp(result['exe_time']).strftime('%Y-%m-%d %H:%M:%S.%f')))
             return {
                 'index': result['index'],
                 'out': out,
