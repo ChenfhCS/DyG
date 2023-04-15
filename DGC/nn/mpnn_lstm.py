@@ -5,7 +5,7 @@ import time
 
 from torch_geometric.nn import GCNConv
 
-from Diana.distributed.utils import (pull_all_tensors, push_all_tensors,
+from DGC.distributed.utils import (pull_all_tensors, push_all_tensors,
                                      pull_tensors, push_tensors)
 
 class MPNNLSTM(nn.Module):

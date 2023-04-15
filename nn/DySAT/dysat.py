@@ -69,7 +69,7 @@ def _tensor_distance(tensor_A, tensor_B):
     return distance
 
 class DySAT(nn.Module):
-    def __init__(self, args, num_features, workload_GCN = None, workload_RNN = None):
+    def __init__(self, args, num_features):
         '''
         Args:
             args: hyperparameters

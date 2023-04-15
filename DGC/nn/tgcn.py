@@ -2,7 +2,7 @@ import torch
 import time
 from torch_geometric.nn import GCNConv
 
-from Diana.distributed.utils import (pull_tensors, push_tensors)
+from DGC.distributed.utils import (pull_tensors, push_tensors)
 
 class TGCN(torch.nn.Module):
     r"""An implementation of the Temporal Graph Convolutional Gated Recurrent Cell.

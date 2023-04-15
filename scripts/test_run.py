@@ -19,10 +19,10 @@ import torch.nn.parallel
 import torch.utils.data
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from Diana.utils import (build_dynamic_graph, load_feat)
-from Diana.distributed.partition import partitioner
-from Diana.distributed.worker import work
-from Diana.distributed.kvstore import KVStoreServer
+from DGC.utils import (build_dynamic_graph, load_feat)
+from DGC.distributed.partition import partitioner
+from DGC.distributed.worker import work
+from DGC.distributed.kvstore import KVStoreServer
 
 from torch.utils.data import dataloader
 from torch.multiprocessing import reductions

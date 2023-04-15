@@ -11,10 +11,10 @@ sys.path.append("..")
 import torch.distributed.rpc as rpc
 import torch.nn.functional as F
 
-from Diana.nn import (DySAT, TGCN, MPNNLSTM, GCLSTM, Classifier)
-from Diana.utils import (set_seed, embedding_distance)
-from Diana.distributed.kvstore import (KVStoreServer, KVStoreClient)
-from Diana.distributed.utils import (get_remote_neighbors, get_local_belong_remote_neighbors,
+from DGC.nn import (DySAT, TGCN, MPNNLSTM, GCLSTM, Classifier)
+from DGC.utils import (set_seed, embedding_distance)
+from DGC.distributed.kvstore import (KVStoreServer, KVStoreClient)
+from DGC.distributed.utils import (get_remote_neighbors, get_local_belong_remote_neighbors,
                                      push_all_tensors, push_tensors)
 
 def LocalTimeFormatter(sec, what):

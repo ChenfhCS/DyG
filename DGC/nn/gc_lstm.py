@@ -4,7 +4,7 @@ from torch.nn import Parameter
 from torch_geometric.nn import ChebConv
 from torch_geometric.nn.inits import glorot, zeros
 
-from Diana.distributed.utils import (pull_tensors, push_tensors)
+from DGC.distributed.utils import (pull_tensors, push_tensors)
 
 class GCLSTM(torch.nn.Module):
     r"""An implementation of the the Integrated Graph Convolutional Long Short Term
