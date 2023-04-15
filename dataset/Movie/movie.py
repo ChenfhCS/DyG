@@ -11,7 +11,7 @@ from ..DynamicGraphSignal import DynamicGraphTemporalSignal
 
 # sys.path.append("..")
 # import DynamicGraphTemporalSignal
-from ..util import generate_degree_feats, create_edge_samples
+from ..util import generate_degree_feats, create_edge_samples, remap
 
 class MovieDatasetLoader(object):
     """A dataset of mobility and history of reported cases of Epinion
@@ -29,8 +29,17 @@ class MovieDatasetLoader(object):
         self._load_graph()
 
     def _load_graph(self):
-        graph_path = current_path + '/dataset/Movie/data/graphs.npz'
-        self._dataset = np.load(graph_path, allow_pickle=True, encoding='latin1')['graph'][0:self.timesteps]
+        self._dataset = []
+        pbar = tqdm(range(self.timesteps), desc='Loading snapshots', leave=False)
+        for snapshot_id in pbar:
+            graph_path = current_path + f'/dataset/Movie/data/snapshots/snapshot_{snapshot_id}.gpickle'
+            snapshot = nx.read_gpickle(graph_path)
+            if snapshot_id > 0:
+                previous_snapshot = self._dataset[snapshot_id-1]
+                snapshot.add_nodes_from(previous_snapshot.nodes(data=True))
+                self._dataset[snapshot_id-1] = remap(previous_snapshot)
+            self._dataset.append(snapshot)
+        self._dataset[-1] = remap(self._dataset[-1])
 
     def _get_edges_and_weights(self):
         self._edges = []
@@ -47,6 +56,11 @@ class MovieDatasetLoader(object):
     def _get_edge_weights(self):
         return 0
     
+    def _get_nodes(self):
+        self._nodes = []
+        for t in range(len(self._dataset)):
+            self._nodes.append(torch.tensor([node for node in self._dataset[t].nodes()]))
+
     def _get_features(self):
         self.features = []
         feats_path = current_path + "/dataset/Movie/data/eval_{}_feats/".format(str(len(self._dataset)))
@@ -102,11 +116,12 @@ class MovieDatasetLoader(object):
         """
 
         self.lags = lags
+        self._get_nodes()
         self._get_edges_and_weights()
         self._get_features()
         self._get_samples()
         dataset = DynamicGraphTemporalSignal(
-           self._dataset, self._edges, self._edge_weights, self.features, self.sample_pos, self.sample_neg
+           self._dataset, self._nodes, self._edges, self._edge_weights, self.features, self.sample_pos, self.sample_neg
         )
         return dataset
 

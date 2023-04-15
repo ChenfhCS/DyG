@@ -4,6 +4,7 @@ import random
 import time
 import datetime
 import numpy as np
+import multiprocessing as mp
 import psutil
 import os, sys
 sys.path.append("..") 
@@ -18,14 +19,35 @@ import torch.nn.parallel
 import torch.utils.data
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from Diana.utils import (set_seed, build_dynamic_graph, load_feat)
+from Diana.utils import (build_dynamic_graph, load_feat)
+from Diana.distributed.partition import partitioner
+from Diana.distributed.worker import work
+from Diana.distributed.kvstore import KVStoreServer
+
+from torch.utils.data import dataloader
+from torch.multiprocessing import reductions
+from multiprocessing.reduction import ForkingPickler
+
+default_collate_func = dataloader.default_collate
+
+
+def default_collate_override(batch):
+  dataloader._use_shared_memory = False
+  return default_collate_func(batch)
+
+setattr(dataloader, 'default_collate', default_collate_override)
+
+for t in torch._storage_classes:
+  if sys.version_info[0] == 2:
+    if t in ForkingPickler.dispatch:
+        del ForkingPickler.dispatch[t]
+  else:
+    if t in ForkingPickler._extra_reducers:
+        del ForkingPickler._extra_reducers[t]
+
 
 datasets = ['Amazon', 'Epinion', 'Movie', 'Stack']
-models = ['DySAT']
-
-current_path = os.path.abspath(os.path.join(os.getcwd(), ".."))
-log_file = current_path + '/log/example_experiment_stale_aggregation.log'
-logging.basicConfig(filename=log_file, level=logging.DEBUG)
+models = ['TGCN', 'MPNN-LSTM', 'GC-LSTM']
 # checkpoint_path = os.path.join() # save and load model states
 
 def _get_args():
@@ -36,100 +58,78 @@ def _get_args():
                     help="model architecture" + '|'.join(models))
     parser.add_argument("--dataset", choices=datasets, required=True,
                     help="dataset:" + '|'.join(datasets))
-    parser.add_argument('--timesteps', type=int, nargs='?', default=15,
+    parser.add_argument('--timesteps', type=int, nargs='?', default=10,
                     help="total time steps used for train, eval and test")
     parser.add_argument('--epochs', type=int, nargs='?', default=200,
                     help="total number of epochs")
-    parser.add_argument('--world_size', type=int, default=2,
+    parser.add_argument('--world_size', type=int, default=1,
                         help='method for DGNN training')
     parser.add_argument("--lr", type=float, default=0.0001,
                         help='learning rate')
     parser.add_argument("--seed", type=int, default=42)
     
-    # optimization configurations
-
+    # DGC configurations
+    parser.add_argument("--partition_method", type=str, default='PSS',
+                        help='learning rate')
+    parser.add_argument("--experiment", type=str, default='partition',
+                        help='experiments')
+    
     args = vars(parser.parse_args())
     logging.info(args)
     return args
 
-
-# def _evaluation(dataloader, sampler, model, criterion, device):
-    model.eval()
-    val_losses = []
-    aps = [] # average precision metrics
-    aucs = [] # auc metrics
-
-    with torch.no_grad():
-        loss = 0
-        for target_nodes, ts, eid in dataloader:
-            mfgs = sampler.sample(target_nodes, ts)
-            mfgs_to_cuda(mfgs, device)
-            mfgs = cache.fetch_feature(
-                mfgs, eid)
-            pred_pos, pred_neg = model(mfgs)
-
-            if args.use_memory:
-                # NB: no need to do backward here
-                # use one function
-                if args.distributed:
-                    model.module.memory.update_mem_mail(
-                        **model.module.last_updated, edge_feats=cache.target_edge_features,
-                        neg_sample_ratio=1)
-                else:
-                    model.memory.update_mem_mail(
-                        **model.last_updated, edge_feats=cache.target_edge_features,
-                        neg_sample_ratio=1)
-
-            total_loss += criterion(pred_pos, torch.ones_like(pred_pos))
-            total_loss += criterion(pred_neg, torch.zeros_like(pred_neg))
-            y_pred = torch.cat([pred_pos, pred_neg], dim=0).sigmoid().cpu()
-            y_true = torch.cat(
-                [torch.ones(pred_pos.size(0)),
-                 torch.zeros(pred_neg.size(0))], dim=0)
-            aucs.append(roc_auc_score(y_true, y_pred))
-            aps.append(average_precision_score(y_true, y_pred))
-
-        val_losses.append(float(total_loss))
-
-    ap = float(torch.tensor(aps).mean())
-    auc_mrr = float(torch.tensor(aucs).mean())
-    return ap, auc_mrr
-
-def _train():
-    return 0
-
 def _main():
     args = _get_args()
-    args['distributed'] = int(os.environ.get('WORLD_SIZE', 0)) > 1
-    # set envs
+    args['distributed'] = torch.cuda.device_count() > 1
     if args['distributed']:
-        args['local_rank'] = int(os.environ['LOCAL_RANK'])
-        args['local_world_size'] = int(os.environ['LOCAL_WORLD_SIZE'])
-        torch.cuda.set_device(args['local_rank'])
-        # torch.distributed.init_process_group('nccl')
-        torch.distributed.init_process_group(
-            'gloo', timeout=datetime.timedelta(seconds=36000))
-        args['rank'] = torch.distributed.get_rank()
-        args['world_size'] = torch.distributed.get_world_size()
+        args['world_size'] = min(torch.cuda.device_count(), args['world_size'])
     else:
-        args['local_rank'] = 0
-        args['local_world_size'] = 1
-    
-    logging.info("rank: {}, world_size: {}".format(args['rank'], args['world_size']))
-
-    mem = psutil.virtual_memory().percent
-    logging.info("memory usage: {}".format(mem))
-
-    set_seed(args['seed'])
+        args['world_size'] = 1
 
     # build dynamic graph
     dgraph = build_dynamic_graph(args)
-    node_feats_list, edge_feats_list = load_feat(
-            dgraph, shared_memory=args['distributed'],
-            local_rank=args['local_rank'], local_world_size=args['local_world_size'])
 
+    if args['partition_method'] == 'PGC':
+        partition_service = partitioner(args, dgraph, args['world_size'], args['partition_method'])
+        datas, data_gpu_map = partition_service.partition()
+        args['num_nodes'] = partition_service.num_nodes
+        print('total nodes: ', np.sum([graph.x.size(0) for graph in dgraph]))
+        print('total chunks: ',len(datas))
+    elif args['partition_method'] == 'PSS':
+        partition_service = partitioner(args, dgraph, args['world_size'], args['partition_method'])
+        datas, data_gpu_map = partition_service.partition()
+        args['num_nodes'] = partition_service.num_nodes
+        print('total nodes: ', np.sum([graph.x.size(0) for graph in dgraph]))
+        print('total snapshots: ',len(datas))
+    elif args['partition_method'] == 'PTS':
+        partition_service = partitioner(args, dgraph, args['world_size'], args['partition_method'])
+        datas, data_gpu_map = partition_service.partition()
+        args['num_nodes'] = partition_service.num_nodes
+        print('total nodes: ', np.sum([graph.x.size(0) for graph in dgraph]))
+        print('total sequences: ',len(datas))
+    else:
+        raise Exception('There is no such an partition method!')
+    
+    other_args = (datas, 
+                  partition_service.spatial_edge_index,
+                  partition_service.temporal_edge_index, 
+                  partition_service.train_samples_list,
+                  partition_service.test_samples_list,
+                  partition_service.train_labels_list,
+                  partition_service.test_labels_list,
+                  data_gpu_map)
+
+    workers = []
+    shared_dict = mp.Manager().dict()
+    for rank in range(args['world_size']):
+        p = mp.Process(target=work, args=(rank, args, other_args, shared_dict))
+        p.start()
+        workers.append(p)
+    for p in workers:
+        p.join()
 
 if __name__ == '__main__':
+    torch.multiprocessing.set_start_method('spawn')
     _main()
 
 

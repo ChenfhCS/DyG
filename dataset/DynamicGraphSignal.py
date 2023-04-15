@@ -29,6 +29,7 @@ class DynamicGraphTemporalSignal(object):
     def __init__(
         self,
         raw_graphs,
+        node_indices,
         edge_indices,
         edge_weights,
         features,
@@ -37,6 +38,7 @@ class DynamicGraphTemporalSignal(object):
         **kwargs
     ):
         self.raw_graphs = raw_graphs
+        self.node_indices = node_indices
         self.edge_indices = edge_indices
         self.edge_weights = edge_weights
         self.features = features
@@ -69,6 +71,12 @@ class DynamicGraphTemporalSignal(object):
             return self.raw_graphs[time_index]
         else:
             return self.raw_graphs[time_index]
+
+    def _get_node_index(self, time_index: int):
+        if self.node_indices[time_index] is None:
+            return self.node_indices[time_index]
+        else:
+            return self.node_indices[time_index]
 
     def _get_edge_index(self, time_index: int):
         if self.edge_indices[time_index] is None:
@@ -189,12 +197,14 @@ class DynamicGraphTemporalSignal(object):
         else:
             raw_graph = self._get_raw_graph(time_index)
             x = self._get_features(time_index)
+            node_index = self._get_node_index(time_index)
             edge_index = self._get_edge_index(time_index)
             edge_weight = self._get_edge_weight(time_index)
             train_samples, train_labels, val_samples, val_labels, test_samples, test_labels = self._get_samples(time_index)
             # y = self._get_target(time_index)
             # additional_features = self._get_additional_features(time_index)
             additional_features = {'raw_graph': raw_graph,
+                                   'node_index': node_index,
                                     'train_samples': train_samples, 
                                     'train_labels': train_labels,
                                     'val_samples': val_samples,

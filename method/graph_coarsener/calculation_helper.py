@@ -34,7 +34,7 @@ def unit(g, node_1, node_2):
     """
     # print()
     if g.edges[node_1, node_2]['type'] == 'tem':
-        return 2
+        return 1
     elif g.edges[node_1, node_2]['type'] == 'str':
         return 1
     else:

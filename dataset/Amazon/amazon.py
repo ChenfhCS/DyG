@@ -11,33 +11,42 @@ from ..DynamicGraphSignal import DynamicGraphTemporalSignal
 
 # sys.path.append("..")
 # import DynamicGraphTemporalSignal
-from ..util import generate_degree_feats, create_edge_samples
-
+from ..util import generate_degree_feats, create_edge_samples, remap
 
 class AmazonDatasetLoader(object):
     """
     """
-
     def __init__(self, timesteps: int = 20):
         self.timesteps = timesteps
         self._load_graph()
 
     def _load_graph(self):
-        graph_path = current_path + '/dataset/Amazon/data/graphs.npz'
-        self._dataset = np.load(graph_path, allow_pickle=True, encoding='latin1')['graph'][10: 10+self.timesteps]
+        self._dataset = []
+        pbar = tqdm(range(self.timesteps), desc='Loading snapshots', leave=False)
+        for snapshot_id in pbar:
+            graph_path = current_path + f'/dataset/Amazon/data/snapshots/snapshot_{snapshot_id}.gpickle'
+            snapshot = nx.read_gpickle(graph_path)
+            if snapshot_id > 0:
+                previous_snapshot = self._dataset[snapshot_id-1]
+                snapshot.add_nodes_from(previous_snapshot.nodes(data=True))
+                self._dataset[snapshot_id-1] = remap(previous_snapshot)
+            self._dataset.append(snapshot)
+        self._dataset[-1] = remap(self._dataset[-1])
 
     def _get_edges_and_weights(self):
         self._edges = []
         self._edge_weights = []
-        for time in range(len(self._dataset)):
-            adj_sp = nx.adjacency_matrix(self._dataset[time]).tocoo()
+        for t in range(len(self._dataset)):
+            adj_sp = nx.adjacency_matrix(self._dataset[t]).tocoo()
             adj = torch.sparse.LongTensor(torch.LongTensor([adj_sp.row.tolist(), adj_sp.col.tolist()]),
                               torch.LongTensor(adj_sp.data.astype(np.int32))).coalesce()
             self._edges.append(adj.indices())
             self._edge_weights.append(adj.values())
     
-    def _get_edge_weights(self):
-        return 0
+    def _get_nodes(self):
+        self._nodes = []
+        for t in range(len(self._dataset)):
+            self._nodes.append(torch.tensor([node for node in self._dataset[t].nodes()]))
     
     def _get_features(self):
         self.features = []
@@ -45,10 +54,10 @@ class AmazonDatasetLoader(object):
         # print(feats_path)
         try:
             pbar = tqdm(self._dataset, desc='Loading features', leave=False)
-            for time, _ in enumerate(pbar):
-                path = feats_path+'no_{}.npz'.format(time)
+            for t, _ in enumerate(pbar):
+                path = feats_path+'no_{}.npz'.format(t)
                 feat = sp.load_npz(path)
-                if time == 0:
+                if t == 0:
                     feat_array = feat.toarray()
                     num_feats = feat_array.shape[1]
                 feat_coo = feat.tocoo()
@@ -79,8 +88,8 @@ class AmazonDatasetLoader(object):
         self.sample_pos = []
         self.sample_neg = []
         pbar = tqdm(self._dataset, desc='Generating samples', leave=False)
-        for time, _ in enumerate(pbar):
-            postive, negative = create_edge_samples(self._dataset[time])
+        for t, _ in enumerate(pbar):
+            postive, negative = create_edge_samples(self._dataset[t])
             self.sample_pos.append(postive)
             self.sample_neg.append(negative)
     
@@ -94,11 +103,12 @@ class AmazonDatasetLoader(object):
         """
 
         self.lags = lags
+        self._get_nodes()
         self._get_edges_and_weights()
         self._get_features()
         self._get_samples()
         dataset = DynamicGraphTemporalSignal(
-           self._dataset, self._edges, self._edge_weights, self.features, self.sample_pos, self.sample_neg
+           self._dataset, self._nodes, self._edges, self._edge_weights, self.features, self.sample_pos, self.sample_neg
         )
         return dataset
 

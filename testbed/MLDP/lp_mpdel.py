@@ -34,29 +34,29 @@ class LabelPropagator:
         self.weight_setup(args['weighting'])
         self.node_weight = {node: 1 for node in self.nodes}
 
-        self.nodes_list_mask = {}
-        for node in self.nodes:
-            if node not in self.nodes_list_mask.keys():
-                self.nodes_list_mask[node] = [[] for _ in range(len(self.graph_list))]
-                snap_id = self.graph.nodes[node]['snap_id'][0]
-                self.nodes_list_mask[node][snap_id].append(self.graph.nodes[node]['orig_id'])
-            # print(self.nodes_list_mask[node])
-        self.nodes_list_mask_full = {}
-        for node in self.nodes:
-            if node not in self.nodes_list_mask_full.keys():
-                self.nodes_list_mask_full[node] = [node]
+        # self.nodes_list_mask = {}
+        # for node in self.nodes:
+        #     if node not in self.nodes_list_mask.keys():
+        #         self.nodes_list_mask[node] = [[] for _ in range(len(self.graph_list))]
+        #         snap_id = self.graph.nodes[node]['snap_id'][0]
+        #         self.nodes_list_mask[node][snap_id].append(self.graph.nodes[node]['orig_id'])
+        #     # print(self.nodes_list_mask[node])
+        # self.nodes_list_mask_full = {}
+        # for node in self.nodes:
+        #     if node not in self.nodes_list_mask_full.keys():
+        #         self.nodes_list_mask_full[node] = [node]
 
-        self.device = torch.device("cuda")
-        self.model_str = MLP_Predictor(in_feature = 2)
-        self.model_str.load_state_dict(torch.load('./MLDP/Model_evaluation/model/str_{}.pt'.format(10)))
-        self.model_str = self.model_str.to(self.device)
+        # self.device = torch.device("cuda")
+        # self.model_str = MLP_Predictor(in_feature = 2)
+        # self.model_str.load_state_dict(torch.load('./MLDP/Model_evaluation/model/str_{}.pt'.format(10)))
+        # self.model_str = self.model_str.to(self.device)
 
-        self.model_tem = MLP_Predictor(in_feature = 2)
-        self.model_tem.load_state_dict(torch.load('./MLDP/Model_evaluation/model/tem_{}.pt'.format(10)))
-        self.model_tem = self.model_tem.to(self.device)
+        # self.model_tem = MLP_Predictor(in_feature = 2)
+        # self.model_tem.load_state_dict(torch.load('./MLDP/Model_evaluation/model/tem_{}.pt'.format(10)))
+        # self.model_tem = self.model_tem.to(self.device)
 
-        self.model_str.eval()
-        self.model_tem.eval()
+        # self.model_str.eval()
+        # self.model_tem.eval()
 
     def weight_setup(self, weighting):
         """
@@ -204,14 +204,14 @@ class LabelPropagator:
             num_neighbors = sum(1 for _ in neighbors_temp)
             if num_neighbors > 0:
                 if self.args['method'] == 'cost':
-                    pick = self.make_a_pick_CT(node, neighbors)
+                    pick = self.make_a_pick(node, neighbors)
                 else:
                     pick = self.make_a_pick(node, neighbors)
                 self.labels[node] = pick
         # print('updated labels: ', self.labels)
         # if self.args.method == 'cost':
-        if step %2 == 0:
-            self.graph_update()
+        # if step %2 == 0:
+        #     self.graph_update()
         current_label_count = len(set(self.labels.values()))
         if self.label_count == current_label_count:
             self.flag = False
@@ -240,9 +240,12 @@ class LabelPropagator:
         index = 0
         # while index < self.rounds and self.flag:
         step = 1
-        for i in tqdm(range(self.args['rounds']), desc='Coarsening', leave=False):
+        pbar = tqdm(range(self.args['rounds']), leave=False)
+        for i in pbar:
             index = index + 1
             # print("\nLabel propagation round: {}; Number of labels: {}; Number of nodes: {}\n".format(index, self.label_count, len(self.nodes)))
             self.do_a_propagation(step)
+            pbar.set_description('Coarsening | #Labels: {}'.format(self.label_count))
             step += 1
-        return self.graph, self.nodes_list_mask, 1
+        # return self.graph, self.nodes_list_mask, 
+        return self.labels

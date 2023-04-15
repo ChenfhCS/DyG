@@ -3,6 +3,12 @@ import numpy as np
 import networkx as nx
 from sklearn.model_selection import train_test_split
 
+# Define a function to remap node ids
+def remap(snapshot):
+    node_mapping = {n: i for i, n in enumerate(sorted(snapshot.nodes()))}
+    snapshot_remap = nx.relabel_nodes(snapshot, node_mapping, copy=True)
+    return snapshot_remap
+
 def generate_degree_feats(graphs, adjs):
     feats = []
     for (graph, adj) in zip(graphs, adjs):
@@ -31,7 +37,7 @@ def create_edge_samples(graph, val_mask_fraction=0.1, test_mask_fraction=0.1):
     """
     edges = np.array(list(nx.Graph(graph).edges()))
     edges_positive = []   # Constraint to restrict new links to existing nodes.
-    Num_of_edges = 1000
+    Num_of_edges = 10000
     for idx, e in enumerate(edges):
         if idx <= Num_of_edges:
         # if next_graph.has_edge(e[0], e[1]) and idx <= Num_of_edges:

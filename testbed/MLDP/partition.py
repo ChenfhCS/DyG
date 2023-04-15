@@ -11,9 +11,12 @@ import random
 from tqdm import tqdm
 # from data_process import load_data, generate_graphs, graph_concat
 
-from .Model_evaluation.mlp import MLP_Predictor
-from .util import graph_concat
-from .coarsen import coarsener
+import sys, os
+sys.path.append(os.path.abspath('/home/DyG/'))
+
+from MLDP.Model_evaluation.mlp import MLP_Predictor
+from MLDP.util import graph_concat
+# from MLDP.coarsen import coarsening
 
 # Simulation setting
 # node_size = 10

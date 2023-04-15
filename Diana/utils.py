@@ -20,6 +20,13 @@ def set_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
+def embedding_distance(tensor_A, tensor_B):
+    sub_c = torch.sub(tensor_A, tensor_B)
+    sq_sub_c = sub_c**2
+    sum_sq_sub_c = torch.sum(sq_sub_c, dim=1)
+    distance = torch.sqrt(sum_sq_sub_c)
+    return distance
+
 def load_dataset(args):
     '''
     return dataset loader, which consists of a series of snapshot;
@@ -58,10 +65,10 @@ def build_dynamic_graph(args):
     else:
         raise ValueError("No such dataset...")
     
-    dgraph = dataset.get_dataset()
-    
-    dgraph_to_device = [snapshot.to(args['local_rank']) for snapshot in dgraph]
-    return dgraph_to_device
+    graphs = dataset.get_dataset()
+    dgraph = [snapshot for snapshot in graphs]
+    # dgraph_to_device = [snapshot.to(args['local_rank']) for snapshot in dgraph]
+    return dgraph
 
 
 def load_feat(dgraph, shared_memory: bool = False, local_rank: int = 0, 

@@ -3,9 +3,24 @@ import networkx as nx
 import torch
 import random
 import numpy as np
+import os, sys
+import colorsys
 
-from .lp_mpdel import LabelPropagator
+import copy
+
+sys.path.append(os.path.abspath('/home/DyG/'))
+from tqdm import tqdm
+# from .lp_mpdel import LabelPropagator
+from dataset.util import remap
+from MLDP.lp_mpdel import LabelPropagator
+from MLDP.util import graph_concat
+
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
+import math
 # from print_and_read import graph_reader, argument_printer
+
+timesteps = 4
 
 def parameter_parser():
     """
@@ -83,15 +98,15 @@ def run_coarsening(args):
 #     plt.savefig('./experiment_results/{}_graph_{}.png'.format(flag, args['dataset']))
 #     plt.close()
 
-def coarsener(args, graph_list, full_graph):
-    # plot_graph(full_graph, args)
-    args['rounds'] = 10
-    args['seed'] = 42
-    args['weighting'] = 'unit'
-    args['method'] = 'cost'
-    # graph_list, full_graph = graph_reader(args, graphs)
-    model = LabelPropagator(graph_list, full_graph, args)
-    coarsened_graph, node_to_nodes_list, node_to_nodes_list_full = model.graph_coarsening()
+# def coarsener(args, graph_list, full_graph):
+#     # plot_graph(full_graph, args)
+#     args['rounds'] = 10
+#     args['seed'] = 42
+#     args['weighting'] = 'unit'
+#     args['method'] = 'cost'
+#     # graph_list, full_graph = graph_reader(args, graphs)
+#     model = LabelPropagator(graph_list, full_graph, args)
+#     coarsened_graph, node_to_nodes_list, node_to_nodes_list_full = model.graph_coarsening()
 
 
     # # remove temporal edges from the original graph
@@ -179,13 +194,7 @@ def coarsener(args, graph_list, full_graph):
 
     # plot_graph(args, full_graph, original_node_color_list, edges_colors, original_nodes_pos, 'original')
     # plot_graph(args, coarsened_graph, color_list, 'red', coarsened_nodes_pos, 'coarse')
-    return coarsened_graph, node_to_nodes_list
-
-if __name__ == '__main__':
-    args = parameter_parser()
-    # argument_printer(args)
-    run_coarsening(args)
-
+    # return coarsened_graph, node_to_nodes_list
 
 def randomcolor():
     colorArr = ['1','2','3','4','5','6','7','8','9','A','B','C','D','E','F']
@@ -193,3 +202,304 @@ def randomcolor():
     for i in range(6):
         color += colorArr[random.randint(0,14)]
     return "#"+color
+
+
+def _coarsening(args, graph_list):
+    args['rounds'] = 50
+    args['seed'] = 42
+    args['weighting'] = 'unit'
+    args['method'] = 'cost'
+    # graph_list, full_graph = graph_reader(args, graphs)
+    full_graph = graph_concat(graph_list)
+    model = LabelPropagator(graph_list, full_graph, args)
+    # coarsened_graph, node_to_nodes_list, node_to_nodes_list_full = model.graph_coarsening()
+    labels = model.graph_coarsening()
+    return full_graph, labels
+
+def _load_graphs(timesteps):
+    current_path = os.path.abspath(os.path.join(os.getcwd(), "../../"))
+    graph_list = []
+    pbar = tqdm(range(timesteps+2), desc='Loading snapshots', leave=False)
+    for snapshot_id in pbar:
+        graph_path = current_path + f'/dataset/Amazon/data/snapshots/snapshot_{snapshot_id}.gpickle'
+        snapshot = nx.read_gpickle(graph_path)
+        if snapshot_id > 0:
+            previous_snapshot = graph_list[snapshot_id-1]
+            snapshot.add_nodes_from(previous_snapshot.nodes(data=True))
+            graph_list[snapshot_id-1] = remap(previous_snapshot)
+        graph_list.append(snapshot)
+    graph_list[-1] = remap(graph_list[-1])
+    return graph_list[2:]
+
+def _plot_chunk(graph, labels):
+    graph_chunk = copy.deepcopy(graph)
+    #remove temporal edges from the coarsened graph
+    temporal_edges = []
+    for edge in graph.edges():
+        if 'str' not in graph.edges[edge]['type']:
+            temporal_edges.append(edge)
+    graph.remove_edges_from(temporal_edges)
+
+    colors = {}
+    # for i, label in enumerate(labels):
+    #     hue = i / len(labels)  # 在色轮上均匀取样
+    #     saturation = 0.8 + 0.2 * random.random()  # 饱和度随机
+    #     lightness = 0.5 + 0.2 * random.random()  # 明度随机
+    #     r, g, b = colorsys.hls_to_rgb(hue, lightness, saturation)
+    #     colors[label] = (int(r*255)/255, int(g*255)/255, int(b*255)/255)
+    
+    cmap = plt.get_cmap('tab10')
+    for i, snap_id in enumerate(range(timesteps)):
+        hue = (i) / (len(labels) + 1)  # 在色轮上均匀取样
+        saturation = 0.8 + 0.2 * random.random()  # 饱和度随机
+        lightness = 0.5 + 0.2 * random.random()  # 明度随机
+        r, g, b = colorsys.hls_to_rgb(hue, lightness, saturation)
+        # colors[snap_id] = (int(r*255)/255, int(g*255)/255, int(b*255)/255)
+        colors[snap_id] = cmap(i)
+
+    local_pos_x = {}
+    local_pos_y = {}
+    labels = {}
+    label_count = 0
+    for node in graph.nodes():
+        if graph.nodes[node]['orig_id'] not in local_pos_x.keys():
+            local_pos_x[graph.nodes[node]['orig_id']] = random.uniform(0, 0.25)
+        if graph.nodes[node]['orig_id'] not in local_pos_y.keys():
+            # local_pos_y[graph.nodes[node]['orig_id']] = random.uniform(0+labels[graph.nodes[node]['label']]*size_label, 0+(labels[graph.nodes[node]['label']]+1)*size_label)
+            local_pos_y[graph.nodes[node]['orig_id']] = random.uniform(0, 1)
+        if graph.nodes[node]['label'] not in labels.keys():
+            labels[graph.nodes[node]['label']] = label_count
+            label_count += 1
+        # if graph.nodes[node]['label'] not in colors:
+        #     colors[graph.nodes[node]['label']] = randomcolor()
+        pos_x = local_pos_x[graph.nodes[node]['orig_id']] + 0.35*graph.nodes[node]['snap_id']
+        # pos_x = local_pos_x[graph.nodes[node]['orig_id']] + 0.15*labels[graph.nodes[node]['label']]
+        # pos_y = local_pos_y[graph.nodes[node]['orig_id']] + 0.2*labels[graph.nodes[node]['label']]
+        pos_y = local_pos_y[graph.nodes[node]['orig_id']]
+        graph.nodes[node]['pos'] = (pos_x, pos_y)
+
+
+    # 设置节点的标签和颜色
+    node_colors = [colors[graph.nodes[node]['snap_id']] for node in graph.nodes()]
+    node_labels = {node: graph.nodes[node]['orig_id'] for node in graph.nodes()}
+
+    # 绘制图形
+    pos = nx.get_node_attributes(graph, 'pos')
+    fig, ax = plt.subplots()
+    nx.draw(graph, pos=pos, with_labels=True, labels=node_labels, node_color=node_colors, node_size=50, font_size=4)
+    plt.savefig('graph.png', dpi=900,bbox_inches='tight')
+    plt.close()
+
+
+
+    # graph chunk
+    #remove links inside chunk
+    edges = []
+    for edge in graph_chunk.edges():
+        if graph_chunk.nodes[edge[0]]['label'] == graph_chunk.nodes[edge[1]]['label']:
+            edges.append(edge)
+    graph_chunk.remove_edges_from(edges)
+    local_pos_x = {}
+    local_pos_y = {}
+    labels = {}
+    label_count = 0
+    for node in graph_chunk.nodes():
+        if node not in local_pos_x.keys():
+            local_pos_x[node] = random.uniform(0, 0.1)
+        if node not in local_pos_y.keys():
+            # local_pos_y[node] = random.uniform(0+labels[node['label']]*size_label, 0+(labels[node['label']]+1)*size_label)
+            local_pos_y[node] = random.uniform(node*(1/graph_chunk.number_of_nodes()), (node + 1)*(1/graph_chunk.number_of_nodes()))
+        if graph_chunk.nodes[node]['label'] not in labels.keys():
+            labels[graph_chunk.nodes[node]['label']] = label_count
+            label_count += 1
+        # if graph_chunk.nodes[node]['label'] not in colors:
+        #     colors[graph_chunk.nodes[node]['label']] = randomcolor()
+        # pos_x = local_pos_x[graph_chunk.nodes[node]['orig_id']] + 0.25*graph_chunk.nodes[node]['snap_id']
+        pos_x = local_pos_x[node] + 0.2*labels[graph_chunk.nodes[node]['label']]
+        # pos_y = local_pos_y[node] + 0.2*labels[node['label']]
+        pos_y = local_pos_y[node]
+        graph_chunk.nodes[node]['pos_chunk'] = (pos_x, pos_y)
+
+    # 设置节点的标签和颜色
+    node_colors = [colors[graph_chunk.nodes[node]['snap_id']] for node in graph_chunk.nodes()]
+    node_labels = {node: graph_chunk.nodes[node]['orig_id'] for node in graph_chunk.nodes()}
+
+    # 绘制图形
+    pos_chunk = nx.get_node_attributes(graph_chunk, 'pos_chunk')
+    fig, ax = plt.subplots()
+    nx.draw(graph_chunk, pos=pos_chunk, with_labels=True, labels=node_labels, node_color=node_colors, node_size=50, font_size=4)
+    for i in range(len(labels)):
+        pos_rec = (-0.05 + 0.2*i, 0)
+        rect = Rectangle(pos_rec, 0.15, 1, fill=False, linestyle='--', linewidth=2)
+        ax.add_patch(rect)
+    plt.savefig('graph_chunk.png', dpi=900,bbox_inches='tight')
+    plt.close()
+
+    return 0
+
+
+def _plot_chunk_label_same_color(graph, labels):
+    graph_chunk = copy.deepcopy(graph)
+    #remove temporal edges from the coarsened graph
+    temporal_edges = []
+    for edge in graph.edges():
+        if 'str' not in graph.edges[edge]['type']:
+            temporal_edges.append(edge)
+    graph.remove_edges_from(temporal_edges)
+
+    colors = {}
+    for i, label in enumerate(labels):
+        hue = i / len(labels)  # 在色轮上均匀取样
+        saturation = 0.8 + 0.2 * random.random()  # 饱和度随机
+        lightness = 0.5 + 0.2 * random.random()  # 明度随机
+        r, g, b = colorsys.hls_to_rgb(hue, lightness, saturation)
+        colors[label] = (int(r*255)/255, int(g*255)/255, int(b*255)/255)
+    
+    cmap = plt.get_cmap('tab10')
+    # for i, label in enumerate(labels):
+    for i, snap_id in enumerate(range(timesteps)):
+        hue = (i) / (len(labels) + 1)  # 在色轮上均匀取样
+        saturation = 0.8 + 0.2 * random.random()  # 饱和度随机
+        lightness = 0.5 + 0.2 * random.random()  # 明度随机
+        r, g, b = colorsys.hls_to_rgb(hue, lightness, saturation)
+        # colors[snap_id] = (int(r*255)/255, int(g*255)/255, int(b*255)/255)
+        colors[snap_id] = cmap(i)
+
+    local_pos_x = {}
+    local_pos_y = {}
+    labels = {}
+    label_count = 0
+    for node in graph.nodes():
+        if graph.nodes[node]['orig_id'] not in local_pos_x.keys():
+            local_pos_x[graph.nodes[node]['orig_id']] = random.uniform(0, 0.25)
+        if graph.nodes[node]['orig_id'] not in local_pos_y.keys():
+            # local_pos_y[graph.nodes[node]['orig_id']] = random.uniform(0+labels[graph.nodes[node]['label']]*size_label, 0+(labels[graph.nodes[node]['label']]+1)*size_label)
+            local_pos_y[graph.nodes[node]['orig_id']] = random.uniform(0, 1)
+        if graph.nodes[node]['label'] not in labels.keys():
+            labels[graph.nodes[node]['label']] = label_count
+            label_count += 1
+        # if graph.nodes[node]['label'] not in colors:
+        #     colors[graph.nodes[node]['label']] = randomcolor()
+        pos_x = local_pos_x[graph.nodes[node]['orig_id']] + 0.35*graph.nodes[node]['snap_id']
+        # pos_x = local_pos_x[graph.nodes[node]['orig_id']] + 0.15*labels[graph.nodes[node]['label']]
+        # pos_y = local_pos_y[graph.nodes[node]['orig_id']] + 0.2*labels[graph.nodes[node]['label']]
+        pos_y = local_pos_y[graph.nodes[node]['orig_id']]
+        graph.nodes[node]['pos'] = (pos_x, pos_y)
+
+
+    # 设置节点的标签和颜色
+    node_colors = ['grey' for node in graph.nodes()]
+    node_labels = {node: graph.nodes[node]['orig_id'] for node in graph.nodes()}
+
+    # 绘制图形
+    pos = nx.get_node_attributes(graph, 'pos')
+    fig, ax = plt.subplots()
+    nx.draw(graph, pos=pos, with_labels=True, labels=node_labels, node_color=node_colors, node_size=50, font_size=4)
+    plt.savefig('graph_label_same_color.png', dpi=900,bbox_inches='tight')
+    plt.close()
+
+
+
+    # graph chunk
+    #remove links inside chunk
+    edges = []
+    for edge in graph_chunk.edges():
+        if graph_chunk.nodes[edge[0]]['label'] == graph_chunk.nodes[edge[1]]['label']:
+            edges.append(edge)
+    graph_chunk.remove_edges_from(edges)
+    # remove structural links
+    edges = []
+    for edge in graph_chunk.edges():
+        if 'tem' not in graph_chunk.edges[edge]['type']:
+            edges.append(edge)
+    graph_chunk.remove_edges_from(edges)
+    local_pos_x = {}
+    local_pos_y = {}
+    labels_dict = {}
+    label_count = 0
+    for node in graph_chunk.nodes():
+        if node not in local_pos_x.keys():
+            # local_pos_x[node] = random.uniform(0, 0.25) + 0.35*graph_chunk.nodes[node]['snap_id']
+            local_pos_x[node] = random.uniform(graph.nodes[node]['snap_id']*(1/timesteps) + graph.nodes[node]['snap_id']*0.1, (graph.nodes[node]['snap_id']+1)*(1/timesteps) + graph.nodes[node]['snap_id']*0.1)
+        if graph_chunk.nodes[node]['label'] not in labels_dict.keys():
+            labels_dict[graph_chunk.nodes[node]['label']] = label_count
+            label_count += 1
+        if node not in local_pos_y.keys():
+            # local_pos_y[node] = random.uniform(0+labels_dict[graph_chunk.nodes[node]['label']]*size_label, 0+(labels_dict[graph_chunk.nodes[node]['label']]+1)*size_label)
+            local_pos_y[node] = random.uniform(labels_dict[graph.nodes[node]['label']]*(1/len(labels)) + labels_dict[graph.nodes[node]['label']]*0.1, (labels_dict[graph.nodes[node]['label']]+1)*(1/len(labels)) + labels_dict[graph.nodes[node]['label']]*0.1)
+            # local_pos_y[node] = random.uniform(0, 0.15) + 0.2*labels_dict[graph.nodes[node]['label']]
+        # if graph_chunk.nodes[node]['label'] not in colors:
+        #     colors[graph_chunk.nodes[node]['label']] = randomcolor()
+        pos_x = local_pos_x[node]
+        # pos_x = local_pos_x[node] + 0.15*labels_dict[graph_chunk.nodes[node]['label']]
+        # pos_y = local_pos_y[node] + 0.2*labels_dict[graph_chunk.nodes[node]['label']]
+        pos_y = local_pos_y[node]
+        graph_chunk.nodes[node]['pos_chunk'] = (pos_x, pos_y)
+
+    # 设置节点的标签和颜色
+    node_colors = [colors[graph_chunk.nodes[node]['snap_id']] for node in graph_chunk.nodes()]
+    node_labels = {node: graph_chunk.nodes[node]['orig_id'] for node in graph_chunk.nodes()}
+
+    # 绘制图形
+    pos_chunk = nx.get_node_attributes(graph_chunk, 'pos_chunk')
+    fig, ax = plt.subplots(figsize=(5, 5))
+    for i in range(len(labels)):
+        pos_rec = (0, 0 + i * 1/(len(labels)) + (i*0.1))
+        # rect = Rectangle(pos_rec, 0.95, min(0.16, 0.99 - pos_rec[1] + 0.1), fill=False, linestyle='--', linewidth=2)
+        # rect = Rectangle(pos_rec, 1, min(0.16, 0.99 - pos_rec[1] + 0.1), fill=True, facecolor='grey')
+        rect = Rectangle(pos_rec, 1 + timesteps*0.08, 1/(len(labels))+0.05, fill=True, facecolor='grey')
+        ax.add_patch(rect)
+    for i in range(timesteps):
+        pos_rec = (0 + i * 1/timesteps + (i*0.1), 0)
+        # rect = Rectangle(pos_rec, 0.3, 1.2, fill=True, facecolor='grey')
+        rect = Rectangle(pos_rec, 1/timesteps, 1 + len(labels)*0.1, fill=False, linestyle='--', linewidth=2)
+        ax.add_patch(rect)
+
+    nx.draw(graph_chunk, pos=pos_chunk, with_labels=True, labels=node_labels, node_color=node_colors, node_size=50, font_size=4)
+    plt.savefig('graph_chunk_label_same_color.png', dpi=900,bbox_inches='tight')
+    plt.close()
+
+    return 0
+
+def _cal_dependencies(graph, labels):
+    dependencies = [[] for i in range(len(labels))]
+    label_dict = {}
+    count_label = 0
+    for node in graph.nodes():
+        node_label = graph.nodes[node]['label']
+        if node_label not in label_dict.keys():
+            label_dict[node_label] = count_label
+            count_label += 1
+        label_chunk = label_dict[node_label]
+        node_snap = graph.nodes[node]['snap_id']
+        node_id = graph.nodes[node]['orig_id']
+        for other_node in graph.nodes:
+            other_node_snap = graph.nodes[other_node]['snap_id']
+            other_node_id = graph.nodes[other_node]['orig_id']
+            if other_node_id == node_id:
+                if other_node_snap == node_snap - 1:
+                    other_node_label = graph.nodes[other_node]['label']
+                    if other_node_label not in label_dict.keys():
+                        label_dict[other_node_label] = count_label
+                        count_label += 1
+                    other_node_chunk = label_dict[other_node_label]
+                    if other_node_chunk not in dependencies[label_chunk] and other_node_chunk != label_chunk:
+                        dependencies[label_chunk].append(other_node_chunk)
+    print(dependencies)
+
+
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Run Label Propagation.")
+    args = vars(parser.parse_args())
+    graph_list = _load_graphs(timesteps)
+    full_graph, labels = _coarsening(args, graph_list)
+    print('Number of labels: ', len(set(labels.values())))
+    nx.set_node_attributes(full_graph, labels, "label")
+    # print([graph.number_of_nodes() for graph in graph_list])
+    # print(labels)
+    # _plot_chunk(full_graph, set(labels.values()))
+    _cal_dependencies(full_graph, set(labels.values()))
+    _plot_chunk_label_same_color(full_graph, set(labels.values()))
+    # print(type(graph_list[0]))
